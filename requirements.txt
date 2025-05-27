@@ -1,0 +1,5 @@
+Flask
+pymongo
+firebase-admin
+pyjwt
+python-dotenv 
