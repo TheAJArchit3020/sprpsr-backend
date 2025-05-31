@@ -17,6 +17,7 @@ class AuthController:
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
+    
     @staticmethod
     def verify_otp():
         """Handle OTP verification and user authentication."""

@@ -22,18 +22,29 @@ class AuthService:
     def verify_and_authenticate(id_token, profile=None):
         """Verify Firebase token and handle user authentication."""
         # Verify Firebase token
-        decoded_token = verify_firebase_token(id_token)
-        phone_number = decoded_token.get('phone_number')
+        try:
+            print(id_token)       
+            decoded_token = verify_firebase_token(id_token)
+            print("token decoded:", decoded_token)
+            phone_number = decoded_token.get('phone_number')
+        except Exception as e:
+            raise ValueError('Error verifying token: {}'.format(str(e)))
+            
+
         
         if not phone_number:
             raise ValueError('Phone number not found in token')
         
         # Check if user exists
-        user = User.find_by_phone(phone_number)
-        
+        print("phone_number", phone_number," ",type(phone_number))
+        user = User.find_by_phone(str(phone_number))
+        print("user", user)
+    
         if user:
             # Existing user - generate JWT
-            token = generate_token(user['_id'])
+            print("user_id", str(user['_id']))
+            token = generate_token(str(user['_id']))
+            print("token", token)
             return {
                 'message': 'Login successful',
                 'token': token
@@ -43,7 +54,9 @@ class AuthService:
             if not profile:
                 raise ValueError('Profile information required for new users')
             
+            print("profile", profile)
             user_id = User.create(phone_number, profile)
+            print("user_id", user_id)
             token = generate_token(user_id)
             
             return {

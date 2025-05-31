@@ -1,6 +1,7 @@
 from flask import Blueprint
 from src.controllers.auth_controller import AuthController
 
+
 # Create auth blueprint
 auth_bp = Blueprint('auth', __name__)
 
@@ -12,3 +13,4 @@ def check_user():
 @auth_bp.route('/verify-otp', methods=['POST'])
 def verify_otp():
     return AuthController.verify_otp() 
+
