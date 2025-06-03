@@ -19,6 +19,7 @@ class User:
             'dob': profile.get('dob'),
             'gender': profile.get('gender'),
             'about': profile.get('about'),
+            'photo_url': profile.get('photo_url'),
             'created_at': datetime.utcnow()
         }
         result = users_collection.insert_one(new_user)

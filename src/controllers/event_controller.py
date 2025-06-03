@@ -1,47 +1,60 @@
 from flask import jsonify, request
 from src.services.event_service import EventService
 from bson import ObjectId
+from src.middleware.auth_middleware import token_required
+import json # Import json to parse the event data string
+
 class EventController:    
     @staticmethod
+    @token_required
     def create_event():
-        """Handle event creation request."""
-        data = request.get_json()
-        print("Received data:", data)
-        auth_header = request.headers.get('Authorization')
-        print("auth_header:", auth_header)
-        if auth_header and auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
-            event_data = data.get('event')
-                         
-            if not token:
-                return jsonify({'error': 'Authorization token is required'}), 401
-            if not event_data:
-                return jsonify({'error': 'Event data is required'}), 400
-            
-            try:
-                new_event = EventService.create_event(token,event_data)
-                return jsonify(new_event), 201
-            except Exception as e:
-                return jsonify({'error': str(e)}), 500
-            
-    @staticmethod
-    def getAllEventofUser():
-        """Get all events of a user."""
+        """Create a new event."""
+        # Get data from form-data
+        event_data_str = request.form.get('event_data')
+        banner = request.files.get('banner') if request.files else None
+        user_id = request.user_id  # This comes from the auth middleware
+
+        if not event_data_str:
+            return jsonify({'error': 'Event data is required'}), 400
+
         try:
-            auth_header = request.headers.get('Authorization')
-            if auth_header and auth_header.startswith('Bearer '):
-                token = auth_header.split(' ')[1]
-            else:
-                token = None
+            # Parse the event data JSON string
+            data = json.loads(event_data_str)
+        except json.JSONDecodeError:
+            return jsonify({'error': 'Invalid event data JSON format'}), 400
 
-            if not token:
-                return jsonify({'error': 'Authorization token is required'}), 401
-
-            events = EventService.get_all_events_of_user(token)
-            serialized_events = [EventService.serialize_event(event) for event in events]
-            print("Fetched events:", serialized_events)
-            return jsonify(serialized_events), 200
+        try:
+            # Pass user_id, data, and banner to the service
+            result = EventService.create_event(user_id, data, banner)
+            return jsonify(result), 201
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @staticmethod
+    @token_required
+    def get_events():
+        """Get all events for the authenticated user."""
+        user_id = request.user_id  # This comes from the auth middleware
         
+        try:
+            events = EventService.get_user_events(user_id)
+            return jsonify(events)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @staticmethod
+    @token_required
+    def get_event(event_id):
+        """Get a specific event."""
+        user_id = request.user_id  # This comes from the auth middleware
+        
+        try:
+            event = EventService.get_event(user_id, event_id)
+            if not event:
+                return jsonify({'error': 'Event not found'}), 404
+            return jsonify(event)
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 

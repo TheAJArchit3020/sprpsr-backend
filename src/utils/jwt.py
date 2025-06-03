@@ -13,16 +13,13 @@ def generate_token(user_id):
         'userId': str(user_id),
         'exp':  datetime.now(timezone.utc)  + timedelta(days=7)
     } 
-    print("JWT_SECRET", JWT_SECRET)
     jwtToken = jwt.encode(payload, JWT_SECRET, algorithm='HS256') 
-    print("jwtToken", jwtToken)
     return jwtToken
 
 def verfiy_token(token):
     """Verify JWT token and return user ID."""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-        print("payload", payload)
         return payload
     except jwt.ExpiredSignatureError:
         print("Token has expired")

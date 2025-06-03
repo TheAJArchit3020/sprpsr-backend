@@ -4,8 +4,11 @@ import os
 
 def initialize_firebase():
     """Initialize Firebase Admin SDK."""
-    cred = credentials.Certificate('firebase-credentials.json')
-    firebase_admin.initialize_app(cred)
+    if not firebase_admin._apps:
+        cred = credentials.Certificate('firebase-credentials.json')
+        firebase_admin.initialize_app(cred, {
+            'storageBucket': 'superposr.firebasestorage.app'
+        })
 
 def verify_firebase_token(id_token):
     """Verify Firebase ID token and return decoded token."""
