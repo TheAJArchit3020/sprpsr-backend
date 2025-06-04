@@ -88,5 +88,47 @@ class EventController:
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
+    @staticmethod
+    @token_required # Protect this endpoint with auth middleware
+    def join_event(event_id):
+        """Handle authenticated user joining an event."""
+        user_id = request.user_id # Get user_id from auth middleware
+        
+        try:
+            result = EventService.join_event(event_id, user_id)
+            return jsonify(result), 200
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @staticmethod
+    @token_required # Protect this endpoint with auth middleware
+    def leave_event(event_id):
+        """Handle authenticated user leaving an event."""
+        user_id = request.user_id # Get user_id from auth middleware
+
+        try:
+            result = EventService.leave_event(event_id, user_id)
+            return jsonify(result), 200
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @staticmethod
+    @token_required # Protect this endpoint with auth middleware
+    def kick_participant(event_id, participant_user_id):
+        """Handle authenticated host kicking a participant from an event."""
+        host_user_id = request.user_id # Get host user_id from auth middleware
+
+        try:
+            result = EventService.kick_participant(event_id, host_user_id, participant_user_id)
+            return jsonify(result), 200
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
 
 

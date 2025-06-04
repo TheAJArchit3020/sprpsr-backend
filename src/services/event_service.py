@@ -2,6 +2,7 @@ from datetime import datetime
 from bson import ObjectId
 from src.config.database import get_database
 from src.models.event import Event
+from src.models.user import User # Import User model to check if user exists
 from src.utils.jwt import verfiy_token
 from src.utils.firebase_storage import upload_to_firebase
 
@@ -46,6 +47,8 @@ class EventService:
             'participants_min': data.get('participants_min'),
             'participants_max': data.get('participants_max'),
             'banner_url': data.get('banner_url'),
+            'status': 'active', # Add status field, default active
+            'participants': [], # Add participants array, default empty
             'created_at': datetime.utcnow(),
             'updated_at': datetime.utcnow()
         }
@@ -170,3 +173,102 @@ class EventService:
         
         # Serialize the results
         return [EventService._serialize_event(event) for event in nearby_events]
+
+    @staticmethod
+    def join_event(event_id, user_id):
+        """Handle a user joining an event.
+           Checks capacity and if user is already a participant.
+        """
+        db = get_database()
+        events_collection = db.events
+        
+        # Find the event
+        try:
+            event_obj = events_collection.find_one({'_id': ObjectId(event_id)})
+        except:
+            raise ValueError("Invalid Event ID")
+            
+        if not event_obj:
+            raise ValueError("Event not found")
+        
+        # Check if user is already a participant
+        if ObjectId(user_id) in event_obj.get('participants', []):
+            raise ValueError("User is already a participant of this event")
+            
+        # Check if event is full
+        max_participants = event_obj.get('participants_max')
+        current_participants_count = len(event_obj.get('participants', []))
+        
+        if max_participants is not None and current_participants_count >= max_participants:
+            raise ValueError("Event is full, cannot join")
+            
+        # Add participant using the method in the model
+        success = Event.add_participant(event_id, user_id)
+        
+        if not success:
+             # This case should ideally not be reached due to checks, but good for robustness
+            raise Exception("Failed to add participant to event")
+            
+        return {'message': 'Successfully joined event'}
+
+    @staticmethod
+    def leave_event(event_id, user_id):
+        """Handle a user leaving an event."""
+        db = get_database()
+        events_collection = db.events
+
+        # Find the event
+        try:
+            event_obj = events_collection.find_one({'_id': ObjectId(event_id)})
+        except:
+            raise ValueError("Invalid Event ID")
+
+        if not event_obj:
+            raise ValueError("Event not found")
+
+        # Check if user is a participant
+        if ObjectId(user_id) not in event_obj.get('participants', []):
+            raise ValueError("User is not a participant of this event")
+
+        # Remove participant using the method in the model
+        success = Event.remove_participant(event_id, user_id)
+        
+        if not success:
+            raise Exception("Failed to remove participant from event")
+            
+        return {'message': 'Successfully left event'}
+
+    @staticmethod
+    def kick_participant(event_id, host_user_id, participant_user_id_to_kick):
+        """Handle a host kicking a participant from an event."""
+        db = get_database()
+        events_collection = db.events
+
+        # Find the event
+        try:
+            event_obj = events_collection.find_one({'_id': ObjectId(event_id)})
+        except:
+            raise ValueError("Invalid Event ID")
+
+        if not event_obj:
+            raise ValueError("Event not found")
+            
+        # Check if the host_user_id is the actual host of the event
+        if event_obj.get('user_id') != ObjectId(host_user_id):
+             raise ValueError("Only the event host can kick participants")
+
+        # Check if the participant to kick is in the participants list
+        if ObjectId(participant_user_id_to_kick) not in event_obj.get('participants', []):
+            raise ValueError("Participant to kick is not in this event")
+            
+        # Check if the host is trying to kick themselves (optional but good to prevent)
+        if ObjectId(host_user_id) == ObjectId(participant_user_id_to_kick):
+             raise ValueError("Host cannot kick themselves")
+
+        # Remove participant using the method in the model
+        success = Event.remove_participant(event_id, participant_user_id_to_kick)
+        
+        if not success:
+            raise Exception("Failed to remove participant from event")
+            
+        return {'message': 'Successfully kicked participant'}

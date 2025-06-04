@@ -2,6 +2,7 @@ from flask import Flask, jsonify
 from src.utils.firebase import initialize_firebase
 from src.routes.auth_routes import auth_bp
 from src.routes.event_routes import event_bp
+from src.routes.user_routes import user_bp
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -12,6 +13,7 @@ initialize_firebase()
 # Register blueprints
 app.register_blueprint(auth_bp, url_prefix='/api')
 app.register_blueprint(event_bp, url_prefix='/api')
+app.register_blueprint(user_bp, url_prefix='/api')
 
 # Root route
 @app.route('/', methods=['GET'])

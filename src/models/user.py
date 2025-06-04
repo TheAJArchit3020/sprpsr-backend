@@ -1,4 +1,5 @@
 from datetime import datetime
+from bson import ObjectId
 from src.config.database import get_database
 
 db = get_database()
@@ -17,7 +18,6 @@ class User:
     def find_by_id(user_id):
         """Find user by ID."""
         # MongoDB stores _id as ObjectId, so convert string ID to ObjectId
-        from bson import ObjectId
         try:
             return users_collection.find_one({'_id': ObjectId(user_id)})
         except:
@@ -43,19 +43,36 @@ class User:
     @staticmethod
     def update_location(user_id, location):
         """Update user's location."""
-        from bson import ObjectId
         try:
-            users_collection.update_one(
+            result = users_collection.update_one(
                 {'_id': ObjectId(user_id)},
                 {'$set': {
                     'location': location,
                     'updated_at': datetime.utcnow()
                 }}
             )
-            return True
+            return result.matched_count > 0
         except Exception as e:
-            # Log the error or handle it as needed
             print(f"Error updating user location: {e}")
+            return False
+
+    @staticmethod
+    def update(user_id, update_data):
+        """Update user profile fields."""
+        try:
+            # Remove _id from update_data if present to prevent updating the immutable _id
+            update_data.pop('_id', None)
+            
+            result = users_collection.update_one(
+                {'_id': ObjectId(user_id)},
+                {'$set': {
+                    **update_data,
+                    'updated_at': datetime.utcnow()
+                }}
+            )
+            return result.matched_count > 0
+        except Exception as e:
+            print(f"Error updating user profile: {e}")
             return False
 
     @staticmethod

@@ -36,6 +36,8 @@ class Event:
             'participants_min': data.get('participants_min'),
             'participants_max': data.get('participants_max'),
             'banner_url': data.get('banner_url'),
+            'status': 'active',
+            'participants': [],
             'created_at': datetime.utcnow(),
             'updated_at': datetime.utcnow()
         }
@@ -50,3 +52,33 @@ class Event:
             return list(events_collection.find({'user_id': ObjectId(user_id)}))
         except:
             return []
+
+    @staticmethod
+    def add_participant(event_id, user_id):
+        """Add a participant to an event.
+           Returns True if added, False otherwise (e.g., user already in list).
+        """
+        try:
+            result = events_collection.update_one(
+                {'_id': ObjectId(event_id)}, 
+                {'$addToSet': {'participants': ObjectId(user_id)}}
+            )
+            return result.matched_count > 0 and result.modified_count > 0
+        except Exception as e:
+            print(f"Error adding participant: {e}")
+            return False
+
+    @staticmethod
+    def remove_participant(event_id, user_id_to_remove):
+        """Remove a participant from an event.
+           Returns True if removed, False otherwise (e.g., user not in list).
+        """
+        try:
+            result = events_collection.update_one(
+                {'_id': ObjectId(event_id)}, 
+                {'$pull': {'participants': ObjectId(user_id_to_remove)}}
+            )
+            return result.matched_count > 0 and result.modified_count > 0
+        except Exception as e:
+            print(f"Error removing participant: {e}")
+            return False
