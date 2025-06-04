@@ -1,5 +1,7 @@
 from flask import jsonify, request
 from src.services.auth_service import AuthService
+from src.middleware.auth_middleware import token_required
+import json
 
 class AuthController:
     @staticmethod
@@ -27,7 +29,6 @@ class AuthController:
         profile_str = request.form.get('profile')
         profile = None
         if profile_str:
-            import json
             try:
                 profile = json.loads(profile_str)
             except json.JSONDecodeError:
@@ -45,6 +46,60 @@ class AuthController:
         
         try:
             result = AuthService.verify_and_authenticate(id_token, profile, photo)
+            return jsonify(result)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500 
+
+    @staticmethod
+    @token_required # Protect this endpoint with auth middleware
+    def update_location():
+        """Update the authenticated user\'s location."""
+        data = request.get_json()
+        user_id = request.user_id # Get user_id from auth middleware
+        location_data = data.get('location')
+
+        if not location_data:
+            return jsonify({'error': 'Location data is required'}), 400
+
+        try:
+            result = AuthService.update_user_location(user_id, location_data)
+            return jsonify(result)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500 
+
+    @staticmethod
+    def create_test_user():
+        """Create a test user for testing purposes."""
+        data = request.get_json()
+        phone = data.get('phone')
+        profile = data.get('profile') # Expecting profile as JSON
+
+        if not phone:
+            return jsonify({'error': 'Phone number is required'}), 400
+        
+        try:
+            result = AuthService.create_test_user(phone, profile)
+            return jsonify(result), 201
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500 
+
+    @staticmethod
+    def sign_in_test_user():
+        """Sign in a test user by phone number."""
+        data = request.get_json()
+        phone = data.get('phone')
+
+        if not phone:
+            return jsonify({'error': 'Phone number is required'}), 400
+
+        try:
+            result = AuthService.sign_in_test_user(phone)
             return jsonify(result)
         except ValueError as e:
             return jsonify({'error': str(e)}), 400

@@ -5,6 +5,9 @@ from src.config.database import get_database
 db = get_database()
 events_collection = db['events']
 
+# Create a 2dsphere index on the location field
+events_collection.create_index([('location', '2dsphere')])
+
 class Event:
     @staticmethod
     def find_by_id(id):
