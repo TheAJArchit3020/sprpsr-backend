@@ -11,3 +11,5 @@ event_bp.route('/events/nearby', methods=['GET'])(EventController.get_nearby_eve
 event_bp.route('/events/<event_id>/join', methods=['POST'])(EventController.join_event)
 event_bp.route('/events/<event_id>/leave', methods=['POST'])(EventController.leave_event)
 event_bp.route('/events/<event_id>/kick/<participant_user_id>', methods=['POST'])(EventController.kick_participant)
+event_bp.route('/events/<event_id>/participants', methods=['GET'])(EventController.get_participants)
+event_bp.route('/events/rate', methods=['POST'])(EventController.submit_rating)

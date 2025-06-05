@@ -5,7 +5,7 @@ from src.middleware.auth_middleware import token_required
 import json # Import json to parse the event data string
 from src.models.user import User # Import User model to fetch user location
 
-class EventController:    
+class EventController:
     @staticmethod
     @token_required
     def create_event():
@@ -32,7 +32,7 @@ class EventController:
             return jsonify({'error': str(e)}), 400
         except Exception as e:
             return jsonify({'error': str(e)}), 500
-    
+            
     @staticmethod
     @token_required
     def get_events():
@@ -90,10 +90,11 @@ class EventController:
 
     @staticmethod
     @token_required # Protect this endpoint with auth middleware
-    def join_event(event_id):
+    def join_event(current_user, event_id):
         """Handle authenticated user joining an event."""
-        user_id = request.user_id # Get user_id from auth middleware
-        
+        # user_id is now available from current_user object provided by middleware
+        user_id = str(current_user.get('_id'))
+
         try:
             result = EventService.join_event(event_id, user_id)
             return jsonify(result), 200
@@ -129,6 +130,42 @@ class EventController:
             return jsonify({'error': str(e)}), 400
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
+    @staticmethod
+    @token_required # Protect this endpoint with auth middleware
+    def get_participants(event_id):
+        """Get participants for a specific event."""
+        try:
+            participants = EventService.get_event_participants(event_id)
+            return jsonify(participants), 200
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 404 # Return 404 if event not found
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @staticmethod
+    @token_required
+    def submit_rating(current_user):
+        """Handle submission of ratings for event participants."""
+        data = request.get_json()
+        event_id = data.get('event_id')
+        rated_user_id = data.get('rated_user_id')
+        rating = data.get('rating')
+        comment = data.get('comment')
+        
+        # The rater is the current user from the token
+        rater_user_id = str(current_user.get('_id'))
+
+        if not all([event_id, rated_user_id, rating is not None]):
+            return jsonify({'message': 'Missing event_id, rated_user_id, or rating'}), 400
+
+        try:
+            result = EventService.submit_rating(event_id, rater_user_id, rated_user_id, rating, comment)
+            return jsonify(result), 200
+        except ValueError as e:
+            return jsonify({'message': str(e)}), 400
+        except Exception as e:
+            return jsonify({'message': 'An error occurred while submitting the rating', 'error': str(e)}), 500
 
 
 

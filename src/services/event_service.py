@@ -3,6 +3,7 @@ from bson import ObjectId
 from src.config.database import get_database
 from src.models.event import Event
 from src.models.user import User # Import User model to check if user exists
+from src.models.rating import Rating # Import Rating model
 from src.utils.jwt import verfiy_token
 from src.utils.firebase_storage import upload_to_firebase
 
@@ -123,8 +124,12 @@ class EventService:
         if 'location' in event_dict and event_dict['location']:
              event_dict['location'] = event_dict['location'] # Location is already in GeoJSON format
             
+        # Serialize participant ObjectIds to strings
+        if 'participants' in event_dict:
+            event_dict['participants'] = [str(p) for p in event_dict['participants']]
+            
         return event_dict
-
+    
     @staticmethod
     def get_all_events_of_user(id_token):
         """Get all events of a user."""
@@ -272,3 +277,80 @@ class EventService:
             raise Exception("Failed to remove participant from event")
             
         return {'message': 'Successfully kicked participant'}
+
+    @staticmethod
+    def get_event_participants(event_id):
+        """Get the list of participants for an event with basic user info."""
+        db = get_database()
+        events_collection = db.events
+        users_collection = db.users # Access users collection
+        
+        # Find the event
+        try:
+            event_obj = events_collection.find_one(
+                {'_id': ObjectId(event_id)},
+                {'participants': 1} # Project only the participants field
+            )
+        except:
+            raise ValueError("Invalid Event ID")
+            
+        if not event_obj:
+            raise ValueError("Event not found")
+            
+        participant_ids = event_obj.get('participants', [])
+        
+        # Fetch user details for the participant IDs
+        # Using $in to find users whose _id is in the participant_ids list
+        participants_cursor = users_collection.find(
+            {'_id': {'$in': participant_ids}},
+            {'_id': 1, 'name': 1, 'photo_url': 1} # Project only necessary fields
+        )
+        
+        # Serialize the user data
+        participants_list = [User.serialize(user) for user in participants_cursor]
+
+        return participants_list
+
+    @staticmethod
+    def submit_rating(event_id, rater_user_id, rated_user_id, rating, comment=None):
+        """Submit a rating and optional comment for a participant in an event."""
+        db = get_database()
+        events_collection = db.events
+        
+        # Find the event
+        try:
+            event_obj = events_collection.find_one({'_id': ObjectId(event_id)})
+        except:
+            raise ValueError("Invalid Event ID")
+            
+        if not event_obj:
+            raise ValueError("Event not found")
+            
+        # Check if the event is over (you'll need to define how to determine this)
+        # For now, we'll skip this check, but it's important for production
+        # if event_obj.get('status') != 'completed':
+        #     raise ValueError("Event is not over yet")
+
+        # Check if rater_user_id is a participant of the event
+        if ObjectId(rater_user_id) not in event_obj.get('participants', []) and event_obj.get('user_id') != ObjectId(rater_user_id):
+            raise ValueError("Only participants or the host can rate for this event")
+            
+        # Check if rated_user_id is a participant of the event or the host
+        is_rated_participant = ObjectId(rated_user_id) in event_obj.get('participants', [])
+        is_rated_host = event_obj.get('user_id') == ObjectId(rated_user_id)
+        
+        if not is_rated_participant and not is_rated_host:
+             raise ValueError("User being rated is not a participant or host of this event")
+
+        # Check if rater is trying to rate themselves
+        if ObjectId(rater_user_id) == ObjectId(rated_user_id):
+            raise ValueError("Cannot rate yourself")
+
+        # Validate the rating value (e.g., between 1 and 5)
+        if not isinstance(rating, (int, float)) or rating < 1 or rating > 5:
+            raise ValueError("Invalid rating value")
+
+        # Create the rating document using the Rating model
+        rating_id = Rating.create(event_id, rater_user_id, rated_user_id, rating, comment)
+
+        return {'message': 'Rating submitted successfully', 'rating_id': str(rating_id)}

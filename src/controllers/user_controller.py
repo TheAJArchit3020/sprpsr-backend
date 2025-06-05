@@ -32,4 +32,15 @@ class UserController:
         except ValueError as e:
             return jsonify({'error': str(e)}), 400
         except Exception as e:
-            return jsonify({'error': str(e)}), 500 
+            return jsonify({'error': str(e)}), 500
+
+    @staticmethod
+    def get_public_profile(user_id):
+        """Get a user's public profile including ratings and comments."""
+        try:
+            user_profile = UserService.get_user_profile_with_ratings(user_id)
+            if user_profile:
+                return jsonify(user_profile), 200
+            return jsonify({'message': 'User not found'}), 404
+        except Exception as e:
+            return jsonify({'message': 'An error occurred while fetching user profile', 'error': str(e)}), 500 
