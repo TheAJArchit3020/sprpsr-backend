@@ -207,6 +207,10 @@ class EventService:
         if max_participants is not None and current_participants_count >= max_participants:
             raise ValueError("Event is full, cannot join")
             
+        # Check if event is private
+        if event_obj.get('is_private', False):
+            raise ValueError("This is a private event. Please send a join request instead.")
+            
         # Add participant using the method in the model
         success = Event.add_participant(event_id, user_id)
         
@@ -325,11 +329,6 @@ class EventService:
             
         if not event_obj:
             raise ValueError("Event not found")
-            
-        # Check if the event is over (you'll need to define how to determine this)
-        # For now, we'll skip this check, but it's important for production
-        # if event_obj.get('status') != 'completed':
-        #     raise ValueError("Event is not over yet")
 
         # Check if rater_user_id is a participant of the event
         if ObjectId(rater_user_id) not in event_obj.get('participants', []) and event_obj.get('user_id') != ObjectId(rater_user_id):
@@ -350,7 +349,9 @@ class EventService:
         if not isinstance(rating, (int, float)) or rating < 1 or rating > 5:
             raise ValueError("Invalid rating value")
 
-        # Create the rating document using the Rating model
-        rating_id = Rating.create(event_id, rater_user_id, rated_user_id, rating, comment)
+        # Update the user's rating using the User model
+        success = User.update_rating(rated_user_id, rating, comment)
+        if not success:
+            raise Exception("Failed to update user rating")
 
-        return {'message': 'Rating submitted successfully', 'rating_id': str(rating_id)}
+        return {'message': 'Rating submitted successfully'}

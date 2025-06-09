@@ -26,6 +26,7 @@ class Event:
             'description': data.get('description'),
             'location': data.get('location'),
             'use_gps': data.get('use_gps', False),
+            'is_private': data.get('is_private', False),
 
             'activity_type': data.get('activity_type'),
             'start_time': data.get('start_time'),

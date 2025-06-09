@@ -82,29 +82,24 @@ class UserService:
 
     @staticmethod
     def get_user_profile_with_ratings(user_id):
-        """Fetches a user's profile including their average rating and latest comments."""
-        user_obj = User.find_by_id(user_id)
-        if user_obj:
-            # Convert ObjectId to string for consistent data structure
-            user_obj['_id'] = str(user_obj['_id'])
+        """Get user profile with rating information."""
+        try:
+            user_profile = User.get_profile_with_ratings(user_id)
+            if not user_profile:
+                return None
 
-            # Fetch average rating
-            average_rating_result = Rating.calculate_average_rating(user_id)
-            # The aggregation pipeline might return an empty list if no ratings exist
-            average_rating = average_rating_result['average_rating'] if average_rating_result else 0.0
-            user_obj['average_rating'] = average_rating
-
-            # Fetch latest comments
-            latest_comments = Rating.find_latest_for_user(user_id)
-            # Serialize ObjectIds in comments if necessary
-            serialized_comments = []
-            for comment in latest_comments:
-                # The Rating.find_latest_for_user method already serializes ObjectIds
-                # We just need to ensure the structure is as expected if not already.
-                # Based on the model, it should return serialized data.
-                serialized_comments.append(comment)
-
-            user_obj['latest_comments'] = serialized_comments
-
-            return user_obj
-        return None
+            # Return only necessary fields
+            return {
+                '_id': user_profile['_id'],
+                'name': user_profile.get('name'),
+                'photo_url': user_profile.get('photo_url'),
+                'ratings': user_profile.get('ratings', {
+                    'total_ratings': 0,
+                    'average_rating': 0,
+                    'ratings_given': 0
+                }),
+                'comments': user_profile.get('comments', [])
+            }
+        except Exception as e:
+            print(f"Error getting user profile: {e}")
+            return None

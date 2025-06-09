@@ -8,12 +8,12 @@ from src.models.user import User # Import User model to fetch user location
 class EventController:
     @staticmethod
     @token_required
-    def create_event():
+    def create_event(current_user):
         """Create a new event."""
         # Get data from form-data
         event_data_str = request.form.get('event_data')
         banner = request.files.get('banner') if request.files else None
-        user_id = request.user_id  # This comes from the auth middleware
+        user_id = str(current_user.get('_id'))
 
         if not event_data_str:
             return jsonify({'error': 'Event data is required'}), 400
