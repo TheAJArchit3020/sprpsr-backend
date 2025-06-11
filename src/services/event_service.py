@@ -1,21 +1,22 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from bson import ObjectId
 from src.config.database import get_database
-from src.models.event import Event
-from src.models.user import User # Import User model to check if user exists
-from src.models.rating import Rating # Import Rating model
+from src.models.event import Event, upcoming_events_collection, active_events_collection, archived_events_collection # Import new collections
+from src.models.user import User 
+from src.models.rating import Rating
 from src.utils.jwt import verfiy_token
 from src.utils.firebase_storage import upload_to_firebase
+import pytz
+from dateutil import parser 
 
 class EventService:
 
     @staticmethod
     def create_event(user_id, data, banner=None):
-        """Create a new event in the database."""
+        """Create a new event in the upcoming_events collection."""
         if not data:
             raise ValueError("Event data is required")
             
-        # Handle banner upload if present
         if banner:
             try:
                 banner_url = upload_to_firebase(banner, folder='event_banners')
@@ -23,108 +24,101 @@ class EventService:
             except Exception as e:
                 raise ValueError(f'Error uploading banner: {str(e)}')
         
-        # Validate and include location data if provided
         location_data = data.get('location')
         if location_data:
             if not isinstance(location_data, dict) or location_data.get('type') != 'Point' or not isinstance(location_data.get('coordinates'), list) or len(location_data['coordinates']) != 2:
                  raise ValueError("Invalid GeoJSON Point format for event location")
                  
-        db = get_database()
-        events_collection = db.events
+        event_id = Event.create(user_id, data)
         
-        event = {
-            'user_id': ObjectId(user_id),  
-            'title': data.get('title'),
-            'description': data.get('description'),
-            'location': location_data, # Include location data
-            'use_gps': data.get('use_gps', False),
+        new_event = upcoming_events_collection.find_one({'_id': ObjectId(event_id)})
 
-            'activity_type': data.get('activity_type'),
-            'start_time': data.get('start_time'),
-            'end_time': data.get('end_time'),
-
-            'days': data.get('days', []),
-
-            'participants_min': data.get('participants_min'),
-            'participants_max': data.get('participants_max'),
-            'banner_url': data.get('banner_url'),
-            'status': 'active', # Add status field, default active
-            'participants': [], # Add participants array, default empty
-            'created_at': datetime.utcnow(),
-            'updated_at': datetime.utcnow()
-        }
-        
-        result = events_collection.insert_one(event)
-        # Convert the event to a dict and serialize ObjectIds
-        event_dict = event.copy()
-        event_dict['_id'] = str(result.inserted_id)
-        event_dict['user_id'] = str(event['user_id'])
-        event_dict['created_at'] = event_dict['created_at'].isoformat()
-        event_dict['updated_at'] = event_dict['updated_at'].isoformat()
-        
-        # Include banner_url and location in the response if they exist
-        if 'banner_url' in event_dict:
-            event_dict['banner_url'] = event_dict['banner_url']
-            
-        if 'location' in event_dict and event_dict['location']:
-            event_dict['location'] = event_dict['location'] # Location is already in GeoJSON format
-            
-        return event_dict
+        return EventService._serialize_event(new_event)
     
     @staticmethod
     def get_user_events(user_id):
-        """Get all events for a specific user."""
-        db = get_database()
-        events_collection = db.events
+        """Get all events for a specific user across all collections, migrating as needed."""
+        all_user_events = Event.find_by_user_id(user_id)
+        current_time = datetime.utcnow().replace(tzinfo=pytz.utc)
         
-        try:
-            events = list(events_collection.find({'user_id': ObjectId(user_id)}))
-            return [EventService._serialize_event(event) for event in events]
-        except:
-            return []
-    
+        upcoming = []
+        active = []
+        archived = []
+
+        for event in all_user_events:
+            event_id = event['_id']
+            status = event['status']
+            
+            try:
+                start_time = parser.isoparse(str(event['start_time'])).replace(tzinfo=pytz.utc)
+                end_time = parser.isoparse(str(event['end_time'])).replace(tzinfo=pytz.utc)
+            except Exception as e:
+                print(f"Warning: Invalid event time format. Skipping event {event_id}. Error: {e}")
+                continue
+
+            # Handle upcoming events
+            if status == 'upcoming' and current_time >= start_time:
+                if Event.move_to_active(event_id):
+                    event['status'] = 'active'
+                    active.append(event)
+                else:
+                    upcoming.append(event)
+            elif status == 'upcoming':
+                upcoming.append(event)
+            
+            # Handle active events
+            elif status == 'active':
+                if current_time - end_time > timedelta(hours=48):
+                    if Event.move_to_archived(event_id):
+                        event['status'] = 'archived'
+                        archived.append(event)
+                    else:
+                        active.append(event)
+                else:
+                    active.append(event)
+            
+            # Handle archived events
+            elif status == 'archived':
+                archived.append(event)
+        
+        return [EventService._serialize_event(e) for e in upcoming + active]
+
     @staticmethod
     def get_event(user_id, event_id):
-        """Get a specific event by ID."""
-        db = get_database()
-        events_collection = db.events
-        
-        try:
-            event = events_collection.find_one({
-                '_id': ObjectId(event_id),
-                'user_id': ObjectId(user_id)
-            })
-            return EventService._serialize_event(event) if event else None
-        except:
+        """Get a specific event by ID, searching across all collections."""
+        event = Event.find_by_id(event_id) 
+
+        if not event:
             return None
-    
+        
+        return EventService._serialize_event(event)
+
     @staticmethod
     def _serialize_event(event):
         """Convert MongoDB event document to JSON-serializable format."""
         if not event:
             return None
             
-        # Create a copy of the event to avoid modifying the original
         event_dict = event.copy()
         
-        # Convert ObjectId fields to strings
         event_dict['_id'] = str(event_dict['_id'])
         event_dict['user_id'] = str(event_dict['user_id'])
         
-        # Convert datetime fields to ISO format strings
-        if 'created_at' in event_dict:
+        if 'created_at' in event_dict and isinstance(event_dict['created_at'], datetime):
             event_dict['created_at'] = event_dict['created_at'].isoformat()
-        if 'updated_at' in event_dict:
+        if 'updated_at' in event_dict and isinstance(event_dict['updated_at'], datetime):
             event_dict['updated_at'] = event_dict['updated_at'].isoformat()
+        if 'start_time' in event_dict and isinstance(event_dict['start_time'], datetime):
+            event_dict['start_time'] = event_dict['start_time'].isoformat()
+        if 'end_time' in event_dict and isinstance(event_dict['end_time'], datetime):
+            event_dict['end_time'] = event_dict['end_time'].isoformat()
             
-        # Include banner_url and location if they exist
         if 'banner_url' in event_dict:
             event_dict['banner_url'] = event_dict['banner_url']
             
         if 'location' in event_dict and event_dict['location']:
-             event_dict['location'] = event_dict['location'] # Location is already in GeoJSON format
+             event_dict['location'] = event_dict['location']
             
-        # Serialize participant ObjectIds to strings
         if 'participants' in event_dict:
             event_dict['participants'] = [str(p) for p in event_dict['participants']]
             
@@ -139,107 +133,110 @@ class EventService:
         if not user_id:
             raise ValueError('User token is invalid or missing user ID')
         
-        # Fetch all events for the user
         events = Event.find_by_user_id(user_id)
-        return events
+        return [EventService._serialize_event(e) for e in events]
 
     @staticmethod
     def get_nearby_events(latitude, longitude, max_distance_km):
-        """Find events near a given location within a specified radius."""
-        db = get_database()
-        events_collection = db.events
-        
-        # Convert max_distance from kilometers to meters
+        """Find upcoming events near a given location within a specified radius."""
+        current_time = datetime.utcnow().replace(tzinfo=pytz.utc)
         max_distance_meters = max_distance_km * 1000
         
         # GeoJSON Point for the query origin
-        # Note: GeoJSON uses [longitude, latitude] order
         near_location = {
             "type": "Point",
             "coordinates": [longitude, latitude]
         }
         
-        # Aggregation pipeline with $geoNear
-        pipeline = [
+        # Common pipeline for both collections
+        geo_pipeline = [
             {
                 "$geoNear": {
                     "near": near_location,
-                    "distanceField": "distance",  # Output distance in meters
+                    "distanceField": "distance",
                     "maxDistance": max_distance_meters,
                     "spherical": True
                 }
             },
-            { "$match": { "location": { "$exists": True, "$ne": None } } }, # Ensure location exists
-            { "$sort": { "distance": 1 } }  # Sort by distance
+            { "$match": { "location": { "$exists": True, "$ne": None } } },
+            { "$sort": { "distance": 1 } }
         ]
+
+        # Get only upcoming events
+        upcoming_events = list(upcoming_events_collection.aggregate(geo_pipeline))
         
-        # Execute the aggregation pipeline
-        nearby_events = list(events_collection.aggregate(pipeline))
-        
-        # Serialize the results
-        return [EventService._serialize_event(event) for event in nearby_events]
+        # Process upcoming events
+        processed_events = []
+        for event in upcoming_events:
+            try:
+                start_time = parser.isoparse(str(event['start_time'])).replace(tzinfo=pytz.utc)
+                if current_time >= start_time:
+                    Event.move_to_active(event['_id'])
+                else:
+                    processed_events.append(event)
+            except Exception as e:
+                print(f"Warning: Invalid event time format. Skipping event {event['_id']}. Error: {e}")
+                continue
+
+        # Return only upcoming events
+        return [EventService._serialize_event(event) for event in processed_events]
 
     @staticmethod
-    def join_event(event_id, user_id):
-        """Handle a user joining an event.
-           Checks capacity and if user is already a participant.
-        """
-        db = get_database()
-        events_collection = db.events
-        
-        # Find the event
-        try:
-            event_obj = events_collection.find_one({'_id': ObjectId(event_id)})
-        except:
-            raise ValueError("Invalid Event ID")
-            
-        if not event_obj:
+    def join_or_request_event(event_id, user_id):
+        """Handle both direct joining (for public events) and join requests (for private events)."""
+        # Find the event in both collections
+        event = Event.find_by_id(event_id)
+        if not event:
             raise ValueError("Event not found")
-        
+            
         # Check if user is already a participant
-        if ObjectId(user_id) in event_obj.get('participants', []):
+        if ObjectId(user_id) in event.get('participants', []):
             raise ValueError("User is already a participant of this event")
             
         # Check if event is full
-        max_participants = event_obj.get('participants_max')
-        current_participants_count = len(event_obj.get('participants', []))
+        max_participants = event.get('participants_max')
+        current_participants_count = len(event.get('participants', []))
         
         if max_participants is not None and current_participants_count >= max_participants:
             raise ValueError("Event is full, cannot join")
             
-        # Check if event is private
-        if event_obj.get('is_private', False):
-            raise ValueError("This is a private event. Please send a join request instead.")
-            
-        # Add participant using the method in the model
-        success = Event.add_participant(event_id, user_id)
-        
-        if not success:
-             # This case should ideally not be reached due to checks, but good for robustness
-            raise Exception("Failed to add participant to event")
-            
-        return {'message': 'Successfully joined event'}
+        # Handle based on event privacy
+        if event.get('is_private', False):
+            # For private events, create a join request
+            from src.services.event_request_service import EventRequestService
+            result = EventRequestService.create_join_request(event_id, user_id)
+            return {
+                'message': 'Join request sent successfully',
+                'request_id': result.get('request_id'),
+                'status': 'pending'
+            }
+        else:
+            # For public events, join directly
+            success = Event.add_participant(event_id, user_id)
+            if not success:
+                raise Exception("Failed to add participant to event")
+            return {
+                'message': 'Successfully joined event',
+                'status': 'joined'
+            }
 
     @staticmethod
     def leave_event(event_id, user_id):
-        """Handle a user leaving an event."""
-        db = get_database()
-        events_collection = db.events
-
-        # Find the event
+        """Handle a user leaving an event. This now targets active events."""
+        # Find the event in the active collection
         try:
-            event_obj = events_collection.find_one({'_id': ObjectId(event_id)})
+            event_obj = active_events_collection.find_one({'_id': ObjectId(event_id)})
         except:
             raise ValueError("Invalid Event ID")
 
         if not event_obj:
-            raise ValueError("Event not found")
+            raise ValueError("Event not found or not active")
 
         # Check if user is a participant
         if ObjectId(user_id) not in event_obj.get('participants', []):
             raise ValueError("User is not a participant of this event")
 
-        # Remove participant using the method in the model
+        # Remove participant using the method in the model (which targets active_events_collection)
         success = Event.remove_participant(event_id, user_id)
         
         if not success:
@@ -249,18 +246,15 @@ class EventService:
 
     @staticmethod
     def kick_participant(event_id, host_user_id, participant_user_id_to_kick):
-        """Handle a host kicking a participant from an event."""
-        db = get_database()
-        events_collection = db.events
-
-        # Find the event
+        """Handle a host kicking a participant from an event. This now targets active events."""
+        # Find the event in the active collection
         try:
-            event_obj = events_collection.find_one({'_id': ObjectId(event_id)})
+            event_obj = active_events_collection.find_one({'_id': ObjectId(event_id)})
         except:
             raise ValueError("Invalid Event ID")
 
         if not event_obj:
-            raise ValueError("Event not found")
+            raise ValueError("Event not found or not active")
             
         # Check if the host_user_id is the actual host of the event
         if event_obj.get('user_id') != ObjectId(host_user_id):
@@ -274,7 +268,7 @@ class EventService:
         if ObjectId(host_user_id) == ObjectId(participant_user_id_to_kick):
              raise ValueError("Host cannot kick themselves")
 
-        # Remove participant using the method in the model
+        # Remove participant using the method in the model (which targets active_events_collection)
         success = Event.remove_participant(event_id, participant_user_id_to_kick)
         
         if not success:
@@ -284,53 +278,40 @@ class EventService:
 
     @staticmethod
     def get_event_participants(event_id):
-        """Get the list of participants for an event with basic user info."""
-        db = get_database()
-        events_collection = db.events
-        users_collection = db.users # Access users collection
-        
-        # Find the event
+        """Get participants for a specific active event."""
+        # Find the event in the active collection
         try:
-            event_obj = events_collection.find_one(
-                {'_id': ObjectId(event_id)},
-                {'participants': 1} # Project only the participants field
-            )
+            event_obj = active_events_collection.find_one({'_id': ObjectId(event_id)})
         except:
             raise ValueError("Invalid Event ID")
-            
-        if not event_obj:
-            raise ValueError("Event not found")
-            
-        participant_ids = event_obj.get('participants', [])
-        
-        # Fetch user details for the participant IDs
-        # Using $in to find users whose _id is in the participant_ids list
-        participants_cursor = users_collection.find(
-            {'_id': {'$in': participant_ids}},
-            {'_id': 1, 'name': 1, 'photo_url': 1} # Project only necessary fields
-        )
-        
-        # Serialize the user data
-        participants_list = [User.serialize(user) for user in participants_cursor]
 
-        return participants_list
+        if not event_obj:
+            raise ValueError("Event not found or not active")
+
+        participant_ids = event_obj.get('participants', [])
+        participants_details = []
+        for p_id in participant_ids:
+            user = User.find_by_id(str(p_id))
+            if user:
+                participants_details.append({
+                    '_id': str(user.get('_id')),
+                    'name': user.get('name'),
+                    'photo_url': user.get('photo_url')
+                })
+        return participants_details
 
     @staticmethod
     def submit_rating(event_id, rater_user_id, rated_user_id, rating, comment=None):
         """Submit a rating and optional comment for a participant in an event."""
-        db = get_database()
-        events_collection = db.events
-        
-        # Find the event
-        try:
-            event_obj = events_collection.find_one({'_id': ObjectId(event_id)})
-        except:
-            raise ValueError("Invalid Event ID")
-            
+        # Ensure the event is in the active or archived collection to allow rating
+        event_obj = active_events_collection.find_one({'_id': ObjectId(event_id)})
         if not event_obj:
-            raise ValueError("Event not found")
+            event_obj = archived_events_collection.find_one({'_id': ObjectId(event_id)})
+        
+        if not event_obj:
+            raise ValueError("Event not found in active or archived states")
 
-        # Check if rater_user_id is a participant of the event
+        # Check if rater_user_id is a participant of the event or the host
         if ObjectId(rater_user_id) not in event_obj.get('participants', []) and event_obj.get('user_id') != ObjectId(rater_user_id):
             raise ValueError("Only participants or the host can rate for this event")
             
@@ -355,3 +336,55 @@ class EventService:
             raise Exception("Failed to update user rating")
 
         return {'message': 'Rating submitted successfully'}
+
+    @staticmethod
+    def get_host_event_details(event_id, host_id):
+        """Get detailed event information for host including participants and pending requests."""
+        # Get event details from active events
+        event = EventService.get_event(host_id, event_id)
+        if not event:
+            raise ValueError("Event not found")
+
+        # Verify if the user is the host
+        if str(event.get('user_id')) != host_id:
+            raise ValueError("You are not the host of this event")
+
+        # Get participants details
+        participants = []
+        for participant_id in event.get('participants', []):
+            user = User.find_by_id(str(participant_id))
+            if user:
+                participants.append({
+                    '_id': str(user.get('_id')),
+                    'name': user.get('name'),
+                    'photo_url': user.get('photo_url'),
+                    'type': 'participant'
+                })
+
+        # Get pending requests
+        from src.services.event_request_service import EventRequestService
+        pending_requests = EventRequestService.get_host_pending_requests(host_id)
+        
+        # Filter requests for this specific event
+        event_pending_requests = []
+        for req in pending_requests:
+            if str(req.get('event_id')) == str(event_id):
+                user = User.find_by_id(str(req.get('user_id')))
+                if user:
+                    event_pending_requests.append({
+                        '_id': str(req.get('_id')),
+                        'user': {
+                            '_id': str(user.get('_id')),
+                            'name': user.get('name'),
+                            'photo_url': user.get('photo_url')
+                        },
+                        'type': 'pending_request',
+                        'created_at': req.get('created_at')
+                    })
+
+        # Combine all data
+        event_details = event  
+        event_details['participants'] = participants
+        event_details['pending_requests'] = event_pending_requests
+
+        return event_details

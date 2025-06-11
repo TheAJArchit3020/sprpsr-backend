@@ -53,11 +53,11 @@ class AuthController:
             return jsonify({'error': str(e)}), 500 
 
     @staticmethod
-    @token_required # Protect this endpoint with auth middleware
+    @token_required 
     def update_location():
         """Update the authenticated user\'s location."""
         data = request.get_json()
-        user_id = request.user_id # Get user_id from auth middleware
+        user_id = request.user_id 
         location_data = data.get('location')
 
         if not location_data:
@@ -76,7 +76,7 @@ class AuthController:
         """Create a test user for testing purposes."""
         data = request.get_json()
         phone = data.get('phone')
-        profile = data.get('profile') # Expecting profile as JSON
+        profile = data.get('profile') 
 
         if not phone:
             return jsonify({'error': 'Phone number is required'}), 400

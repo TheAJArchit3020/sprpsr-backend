@@ -2,4 +2,12 @@ Flask
 pymongo
 firebase-admin
 pyjwt
-python-dotenv 
+python-dotenv
+flask-cors
+flask-jwt-extended
+bcrypt
+flask-mail
+flasgger
+apispec
+apispec-webframeworks
+marshmallow 

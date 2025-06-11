@@ -7,7 +7,7 @@ class ChatController:
     @token_required
     def post_message(event_id):
         """Post a new message to an event chat."""
-        user_id = request.user_id  # From auth middleware
+        user_id = request.user_id  
         data = request.get_json()
         message = data.get('message')
 
@@ -26,7 +26,7 @@ class ChatController:
     @token_required
     def get_event_chats(event_id):
         """Get all chat messages for a specific event."""
-        user_id = request.user_id  # From auth middleware
+        user_id = request.user_id 
 
         try:
             messages = ChatService.get_event_messages(event_id, user_id)

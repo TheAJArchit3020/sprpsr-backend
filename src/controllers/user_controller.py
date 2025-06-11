@@ -8,7 +8,7 @@ class UserController:
     @token_required # Protect this endpoint with auth middleware
     def update_profile():
         """Update authenticated user's profile."""
-        user_id = request.user_id # Get user_id from auth middleware
+        user_id = request.user_id 
 
         # Profile update data is sent as a JSON string within form-data
         update_data_str = request.form.get('update_data')

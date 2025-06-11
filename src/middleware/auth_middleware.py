@@ -28,20 +28,17 @@ def token_required(f):
         try:
             # Decode token
             data = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-            # Assuming the token contains a 'user_id' field
+            # Get user_id from token
             user_id = data.get('userId')
 
             if not user_id:
                 return jsonify({'message': 'Token is invalid or missing user ID!'}), 401
             
-            # Fetch the user from the database
-            current_user = User.find_by_id(user_id)
+            # Set user_id in request object for easy access
+            request.user_id = user_id
             
-            if not current_user:
-                return jsonify({'message': 'User not found!'}), 404
-
-            # Pass the fetched user object to the decorated function
-            return f(current_user, *args, **kwargs)
+            # Call the decorated function
+            return f(*args, **kwargs)
         except jwt.ExpiredSignatureError:
             return jsonify({'message': 'Token has expired!'}), 401
         except jwt.InvalidTokenError:

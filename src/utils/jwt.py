@@ -27,11 +27,3 @@ def verfiy_token(token):
     except jwt.InvalidTokenError:
         print("Invalid token")
         raise ValueError('Invalid token')
-    
-       
-
-#user {'_id': ObjectId('6839575207aad1733a9d6218'), 
-# 'phone': '+919963504761', 'name': 'John Doe', 
-# 'dob': '01/01/1990', 'gender': 'Male', 
-# 'about': 'Software engineer and music lover', 
-# 'created_at': datetime.datetime(2025, 5, 30, 6, 59, 30, 541000)}

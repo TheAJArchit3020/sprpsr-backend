@@ -46,7 +46,6 @@ class ChatMessage:
         message_dict['event_id'] = str(message_dict['event_id'])
         message_dict['user_id'] = str(message_dict['user_id'])
         
-        # Convert datetime field to ISO format string
         if 'timestamp' in message_dict and isinstance(message_dict['timestamp'], datetime):
             message_dict['timestamp'] = message_dict['timestamp'].isoformat()
             

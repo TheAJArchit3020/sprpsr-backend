@@ -37,7 +37,7 @@ class EventController:
     @token_required
     def get_events():
         """Get all events for the authenticated user."""
-        user_id = request.user_id  # This comes from the auth middleware
+        user_id = request.user_id  # # Get user_id from current_user
         
         try:
             events = EventService.get_user_events(user_id)
@@ -60,23 +60,22 @@ class EventController:
             return jsonify({'error': str(e)}), 500
 
     @staticmethod
-    @token_required # Protect this endpoint with auth middleware
     def get_nearby_events():
-        """Get events near the authenticated user\'s location."""
-        user_id = request.user_id # Get user_id from auth middleware
-        max_distance_km = request.args.get('max_distance_km', type=float, default=10) # Default to 10 km
+        """Get events near the authenticated user's location."""
+        user_id = request.user_id  # Get user_id from the token
+        max_distance_km = request.args.get('max_distance_km', type=float, default=10)  # Default to 10 km
 
         # Fetch the user to get their location
         user = User.find_by_id(user_id)
 
         if not user or 'location' not in user or not user['location']:
-             return jsonify({'error': 'User location not found. Please update your location.'}), 400
+            return jsonify({'error': 'User location not found. Please update your location.'}), 400
             
         user_location = user['location']
         
         # Ensure location is in the correct GeoJSON Point format
         if not isinstance(user_location, dict) or user_location.get('type') != 'Point' or not isinstance(user_location.get('coordinates'), list) or len(user_location['coordinates']) != 2:
-             return jsonify({'error': 'Invalid user location data format.'}), 500 # Internal server error as data is corrupt
+            return jsonify({'error': 'Invalid user location data format.'}), 500  # Internal server error as data is corrupt
 
         longitude = user_location['coordinates'][0]
         latitude = user_location['coordinates'][1]
@@ -89,14 +88,13 @@ class EventController:
             return jsonify({'error': str(e)}), 500
 
     @staticmethod
-    @token_required # Protect this endpoint with auth middleware
-    def join_event(current_user, event_id):
-        """Handle authenticated user joining an event."""
-        # user_id is now available from current_user object provided by middleware
-        user_id = str(current_user.get('_id'))
+    @token_required
+    def join_event(event_id):
+        """Handle authenticated user joining an event or requesting to join a private event."""
+        user_id = request.user_id  # Get user_id from auth middleware
 
         try:
-            result = EventService.join_event(event_id, user_id)
+            result = EventService.join_or_request_event(event_id, user_id)
             return jsonify(result), 200
         except ValueError as e:
             return jsonify({'error': str(e)}), 400
@@ -166,6 +164,20 @@ class EventController:
             return jsonify({'message': str(e)}), 400
         except Exception as e:
             return jsonify({'message': 'An error occurred while submitting the rating', 'error': str(e)}), 500
+
+    @staticmethod
+    @token_required
+    def get_host_event_details(event_id):
+        """Get detailed event information for host including participants and pending requests."""
+        host_id = request.user_id  # Get host_id from auth middleware
+
+        try:
+            event_details = EventService.get_host_event_details(event_id, host_id)
+            return jsonify(event_details), 200
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
 
 
 

@@ -33,7 +33,7 @@ class EventRequestController:
     @token_required
     def handle_request(request_id):
         """Handle (accept/reject) a join request."""
-        host_id = request.user_id  # From auth middleware
+        host_id = request.user_id  # Get host_id from auth middleware
         data = request.get_json()
         action = data.get('action')
         

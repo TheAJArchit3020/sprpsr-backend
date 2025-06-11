@@ -56,8 +56,27 @@ class ChatService:
         # Get messages for the event
         messages = ChatMessage.get_messages_for_event(event_id)
         
-        # Optionally enhance messages with user details (name, photo_url)
-        # This requires fetching user data for each unique user_id in the messages
-        # For now, we'll return raw messages. Enhancement can be added later if needed.
-        
-        return messages 
+        # Enhance messages with user details
+        enhanced_messages = []
+        for message in messages:
+            # Get user details
+            user = User.find_by_id(str(message.get('user_id')))
+            if user:
+                enhanced_message = message.copy()
+                enhanced_message['user'] = {
+                    '_id': str(user.get('_id')),
+                    'name': user.get('name'),
+                    'photo_url': user.get('photo_url')
+                }
+                enhanced_messages.append(enhanced_message)
+            else:
+                # If user not found, still include message but with minimal user info
+                enhanced_message = message.copy()
+                enhanced_message['user'] = {
+                    '_id': str(message.get('user_id')),
+                    'name': 'Unknown User',
+                    'photo_url': None
+                }
+                enhanced_messages.append(enhanced_message)
+
+        return enhanced_messages 
