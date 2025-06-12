@@ -67,6 +67,7 @@ class Event:
             'activity_type': data.get('activity_type'),
             'start_time': start_time_kolkata,
             'end_time': end_time_kolkata,    
+            'location_name': data.get('location_name'),
             'participants_min': data.get('participants_min'),
             'participants_max': data.get('participants_max'),
             'banner_url': data.get('banner_url'),
