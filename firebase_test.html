@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Firebase Phone Auth with ID Token</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  </head>
+  <body>
+    <h2>Login with Phone (Firebase OTP)</h2>
+
+    <input type="text" id="phoneNumber" placeholder="+91XXXXXXXXXX" /><br />
+    <div id="recaptcha-container"></div>
+    <button onclick="sendOTP()">Send OTP</button>
+
+    <br /><br />
+
+    <input type="text" id="otp" placeholder="Enter OTP" /><br />
+    <button onclick="verifyOTP()">Verify OTP & Get ID Token</button>
+
+    <pre id="output"></pre>
+
+    <script>
+      // 🔧 Replace with your Firebase project config
+      const firebaseConfig = {
+        apiKey: "AIzaSyB6pohr1L1hJqGyUSe2FnrcWQ7fRMTPiv0",
+        authDomain: "superposr.firebaseapp.com",
+        projectId: "superposr",
+        storageBucket: "rsuperposr.firebasestorage.app",
+        //messagingSenderId: "SENDER_ID",
+        appId: "1:59458392420:web:1b4cea6d32179ceb526a71",
+      };
+
+      firebase.initializeApp(firebaseConfig);
+      const auth = firebase.auth();
+
+      let confirmationResult;
+
+      function sendOTP() {
+        const phoneNumber = document.getElementById("phoneNumber").value;
+        const output = document.getElementById("output");
+
+        window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier(
+          "recaptcha-container",
+          {
+            size: "normal",
+            callback: function (response) {
+              // reCAPTCHA solved
+            },
+          }
+        );
+
+        auth
+          .signInWithPhoneNumber(phoneNumber, window.recaptchaVerifier)
+          .then((result) => {
+            confirmationResult = result;
+            output.textContent = "OTP sent!";
+          })
+          .catch((error) => {
+            output.textContent = "Error sending OTP: " + error.message;
+          });
+      }
+
+      function verifyOTP() {
+        const code = document.getElementById("otp").value;
+        const output = document.getElementById("output");
+
+        confirmationResult
+          .confirm(code)
+          .then((result) => {
+            return result.user.getIdToken(true);
+          })
+          .then((idToken) => {
+            output.textContent = "✅ ID Token:\n" + idToken;
+          })
+          .catch((error) => {
+            output.textContent = "❌ Error verifying OTP: " + error.message;
+          });
+      }
+    </script>
+  </body>
+</html>

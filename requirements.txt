@@ -1,0 +1,13 @@
+Flask
+pymongo
+firebase-admin
+pyjwt
+python-dotenv
+flask-cors
+flask-jwt-extended
+bcrypt
+flask-mail
+flasgger
+apispec
+apispec-webframeworks
+marshmallow 
