@@ -64,13 +64,9 @@ class Event:
             'location': data.get('location'),
             'use_gps': data.get('use_gps', False),
             'is_private': data.get('is_private', False),
-
             'activity_type': data.get('activity_type'),
             'start_time': start_time_kolkata,
             'end_time': end_time_kolkata,    
-
-            'days': data.get('days', []),
-
             'participants_min': data.get('participants_min'),
             'participants_max': data.get('participants_max'),
             'banner_url': data.get('banner_url'),
