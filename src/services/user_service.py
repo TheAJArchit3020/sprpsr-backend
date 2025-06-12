@@ -5,7 +5,6 @@ from src.utils.firebase_storage import upload_to_firebase
 from bson.objectid import ObjectId
 from datetime import datetime
 from src.config.database import get_database
-from src.models.rating import Rating
 
 class AuthService:
     # ... (existing methods: check_user, verify_and_authenticate, update_user_location, create_test_user, sign_in_test_user) ...

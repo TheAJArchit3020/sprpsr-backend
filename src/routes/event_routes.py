@@ -1,4 +1,4 @@
-from flask import Blueprint
+from flask import Blueprint, request, jsonify
 from src.controllers.event_controller import EventController
 from src.middleware.auth_middleware import token_required
 
@@ -6,7 +6,7 @@ event_bp = Blueprint('events', __name__)
 
 @event_bp.route('/events', methods=['POST'])
 @token_required
-def create_event(current_user):
+def create_event():
     """
     Create a new event
     ---
@@ -154,7 +154,7 @@ def create_event(current_user):
       500:
         description: Internal server error
     """
-    return EventController.create_event(current_user)
+    return EventController.create_event()
 
 @event_bp.route('/events', methods=['GET'])
 @token_required
@@ -469,41 +469,41 @@ def get_participants(event_id):
     """
     return EventController.get_participants(event_id)
 
-@event_bp.route('/events/rate', methods=['POST'])
+@event_bp.route('/events/<event_id>/rate', methods=['POST'])
 @token_required
-def submit_rating(current_user):
+def submit_rating(event_id):
     """
-    Submit a rating for an event participant
+    Submit a rating for a participant in an event
     ---
     tags:
       - Events
-    security:
-      - Bearer: []
     parameters:
-      - in: body
-        name: body
+      - name: event_id
+        in: path
+        type: string
+        required: true
+        description: ID of the event
+      - name: body
+        in: body
         required: true
         schema:
           type: object
           required:
-            - event_id
             - rated_user_id
             - rating
           properties:
-            event_id:
-              type: string
-              description: ID of the event
             rated_user_id:
               type: string
               description: ID of the user being rated
             rating:
               type: number
-              minimum: 1
-              maximum: 5
               description: Rating value (1-5)
             comment:
               type: string
-              description: Optional comment
+              description: Optional comment about the rating
+            no_show:
+              type: boolean
+              description: Whether the user was a no-show
     responses:
       200:
         description: Rating submitted successfully
@@ -512,14 +512,52 @@ def submit_rating(current_user):
           properties:
             message:
               type: string
+              example: Rating submitted successfully
       400:
-        description: Bad request
+        description: Invalid request or validation error
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: Invalid rating value
       401:
         description: Unauthorized
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: Token is missing
       500:
         description: Internal server error
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: An error occurred while submitting the rating
     """
-    return EventController.submit_rating(current_user)
+    data = request.get_json()
+    rated_user_id = data.get('rated_user_id')
+    rating = data.get('rating')
+    comment = data.get('comment')
+    no_show = data.get('no_show', False)
+    
+    # The rater is the current user from the token
+    rater_user_id = request.user_id
+
+    if not all([rated_user_id, rating is not None]):
+        return jsonify({'error': 'Missing rated_user_id or rating'}), 400
+
+    return EventController.submit_rating(
+        event_id=event_id,
+        rater_user_id=rater_user_id,
+        rated_user_id=rated_user_id,
+        rating=rating,
+        comment=comment,
+        no_show=no_show
+    )
 
 @event_bp.route('/events/<event_id>/host-details', methods=['GET'])
 @token_required

@@ -94,65 +94,60 @@ class User:
         return user_dict 
 
     @staticmethod
-    def update_rating(user_id, new_rating, comment=None):
+    def update_rating(user_id, rating, comment=None):
         """Update user's rating and comments."""
-        try:
-            user = users_collection.find_one({'_id': ObjectId(user_id)})
-            if not user:
-                return False
-
-            # Initialize rating fields if they don't exist
-            if 'ratings' not in user:
-                user['ratings'] = {
-                    'total_ratings': 0,
-                    'average_rating': 0,
-                    'ratings_given': 0
-                }
-            if 'comments' not in user:
-                user['comments'] = []
-
-            # Update rating statistics
-            current_total = user['ratings']['total_ratings']
-            current_count = user['ratings']['ratings_given']
-            
-            new_total = current_total + new_rating
-            new_count = current_count + 1
-            new_average = new_total / new_count
-
-            # Prepare comment object if provided
-            comment_obj = None
-            if comment:
-                comment_obj = {
-                    'comment': comment,
-                    'created_at': datetime.utcnow()
-                }
-
-            # Update user document
-            update_data = {
-                'ratings.total_ratings': new_total,
-                'ratings.ratings_given': new_count,
-                'ratings.average_rating': new_average
-            }
-
-            # Add comment if provided
-            if comment_obj:
-                # Add new comment and keep only last 5
-                update_data['$push'] = {
-                    'comments': {
-                        '$each': [comment_obj],
-                        '$slice': -5  # Keep only last 5 comments
-                    }
-                }
-
-            result = users_collection.update_one(
-                {'_id': ObjectId(user_id)},
-                {'$set': update_data}
-            )
-            
-            return result.modified_count > 0
-        except Exception as e:
-            print(f"Error updating rating: {e}")
+        user = User.find_by_id(user_id)
+        if not user:
             return False
+
+        # Get current rating stats
+        current_rating = user.get('rating', 0)
+        rating_count = user.get('rating_count', 0)
+        total_rating = user.get('total_rating', 0)
+        comments = user.get('comments', [])
+
+        # Update rating stats
+        new_total_rating = total_rating + rating
+        new_rating_count = rating_count + 1
+        new_avg_rating = new_total_rating / new_rating_count
+
+        # Add new comment if provided
+        if comment:
+            comments.append({
+                'comment': comment,
+                'created_at': datetime.utcnow()
+            })
+            # Keep only last 5 comments
+            comments = comments[-5:]
+
+        # Update user document
+        User.collection.update_one(
+            {'_id': ObjectId(user_id)},
+            {
+                '$set': {
+                    'rating': new_avg_rating,
+                    'rating_count': new_rating_count,
+                    'total_rating': new_total_rating,
+                    'comments': comments
+                }
+            }
+        )
+        return True
+
+    @staticmethod
+    def increment_event_counts(user_id, completed=False, participated=False):
+        """Increment event participation counts."""
+        update = {}
+        if completed:
+            update['$inc'] = {'events_completed': 1}
+        if participated:
+            update['$inc'] = {'events_participated': 1}
+        
+        if update:
+            User.collection.update_one(
+                {'_id': ObjectId(user_id)},
+                update
+            )
 
     @staticmethod
     def get_profile_with_ratings(user_id):

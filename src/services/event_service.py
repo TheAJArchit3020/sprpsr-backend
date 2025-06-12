@@ -3,11 +3,11 @@ from bson import ObjectId
 from src.config.database import get_database
 from src.models.event import Event, upcoming_events_collection, active_events_collection, archived_events_collection # Import new collections
 from src.models.user import User 
-from src.models.rating import Rating
 from src.utils.jwt import verfiy_token
 from src.utils.firebase_storage import upload_to_firebase
 import pytz
 from dateutil import parser 
+from src.models.feedback import Feedback
 
 class EventService:
 
@@ -301,7 +301,7 @@ class EventService:
         return participants_details
 
     @staticmethod
-    def submit_rating(event_id, rater_user_id, rated_user_id, rating, comment=None):
+    def submit_rating(event_id, rater_user_id, rated_user_id, rating, comment=None, no_show=False):
         """Submit a rating and optional comment for a participant in an event."""
         # Ensure the event is in the active or archived collection to allow rating
         event_obj = active_events_collection.find_one({'_id': ObjectId(event_id)})
@@ -320,7 +320,7 @@ class EventService:
         is_rated_host = event_obj.get('user_id') == ObjectId(rated_user_id)
         
         if not is_rated_participant and not is_rated_host:
-             raise ValueError("User being rated is not a participant or host of this event")
+            raise ValueError("User being rated is not a participant or host of this event")
 
         # Check if rater is trying to rate themselves
         if ObjectId(rater_user_id) == ObjectId(rated_user_id):
@@ -330,10 +330,8 @@ class EventService:
         if not isinstance(rating, (int, float)) or rating < 1 or rating > 5:
             raise ValueError("Invalid rating value")
 
-        # Update the user's rating using the User model
-        success = User.update_rating(rated_user_id, rating, comment)
-        if not success:
-            raise Exception("Failed to update user rating")
+        # Create feedback entry
+        Feedback.create_feedback(event_id, rater_user_id, rated_user_id, rating, comment, no_show)
 
         return {'message': 'Rating submitted successfully'}
 
