@@ -95,13 +95,23 @@ class ChatService:
                     # Keep only last 5 comments, sorted by date
                     comments = sorted(comments, key=lambda x: x['created_at'], reverse=True)[:5]
                     
+                    # Get events organized by this user
+                    organized_events = Event.find_by_user_id_as_host(rated_user_id)
+                    events_organized_count = len(organized_events)
+                    
+                    # Get the 5 latest organized event IDs
+                    latest_organized_events = sorted(organized_events, key=lambda x: x.get('created_at', datetime.min), reverse=True)[:5]
+                    latest_organized_event_ids = [event['_id'] for event in latest_organized_events]
+
                     # Update user document
                     User.update(rated_user_id, {
                         'rating': avg_rating,
                         'rating_count': rating_count,
                         'total_rating': total_rating,
                         'events_completed': events_completed,
-                        'comments': comments
+                        'comments': comments,
+                        'events_organized': events_organized_count,
+                        'latest_events': latest_organized_event_ids
                     })
                 
                 # AFTER updating all users, archive the feedbacks

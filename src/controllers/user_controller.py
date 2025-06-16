@@ -35,6 +35,7 @@ class UserController:
             return jsonify({'error': str(e)}), 500
 
     @staticmethod
+    @token_required
     def get_public_profile(user_id):
         """Get a user's public profile including ratings and comments."""
         try:
@@ -43,4 +44,17 @@ class UserController:
                 return jsonify(user_profile), 200
             return jsonify({'message': 'User not found'}), 404
         except Exception as e:
-            return jsonify({'message': 'An error occurred while fetching user profile', 'error': str(e)}), 500 
+            return jsonify({'message': 'An error occurred while fetching user profile', 'error': str(e)}), 500
+
+    @staticmethod
+    @token_required
+    def get_participants_by_event(event_id):
+        """Get all participants for a specific event."""
+        requesting_user_id = request.user_id # Get user ID from the token
+        try:
+            participants = UserService.get_participants_by_event(event_id, requesting_user_id)
+            return jsonify(participants), 200
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400 # Changed 404 to 400 for more specific error
+        except Exception as e:
+            return jsonify({'message': 'An error occurred while fetching participants', 'error': str(e)}), 500 

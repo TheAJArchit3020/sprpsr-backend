@@ -28,7 +28,7 @@ class AuthController:
         # The profile data is sent as a string, so we need to parse it
         profile_str = request.form.get('profile')
         profile = None
-        if profile_str:
+        if profile_str and profile_str.strip():
             try:
                 profile = json.loads(profile_str)
             except json.JSONDecodeError:

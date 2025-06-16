@@ -83,22 +83,78 @@ class UserService:
     def get_user_profile_with_ratings(user_id):
         """Get user profile with rating information."""
         try:
-            user_profile = User.get_profile_with_ratings(user_id)
-            if not user_profile:
+            user = User.find_by_id(user_id) # Use User model's find_by_id
+            if not user:
                 return None
 
-            # Return only necessary fields
-            return {
-                '_id': user_profile['_id'],
-                'name': user_profile.get('name'),
-                'photo_url': user_profile.get('photo_url'),
-                'ratings': user_profile.get('ratings', {
-                    'total_ratings': 0,
-                    'average_rating': 0,
-                    'ratings_given': 0
-                }),
-                'comments': user_profile.get('comments', [])
-            }
-        except Exception as e:
-            print(f"Error getting user profile: {e}")
+            # Serialize the user data first
+            user_dict = User.serialize(user)
+
+            # Ensure rating fields exist (if not already handled by serialize or model)
+            if 'rating' not in user_dict: # Check for rating field directly
+                user_dict['rating'] = 0
+            if 'rating_count' not in user_dict:
+                user_dict['rating_count'] = 0
+            if 'total_rating' not in user_dict:
+                user_dict['total_rating'] = 0
+            if 'comments' not in user_dict:
+                user_dict['comments'] = []
+            if 'events_organized' not in user_dict:
+                user_dict['events_organized'] = 0
+            if 'latest_events' not in user_dict:
+                user_dict['latest_events'] = []
+
+            # Populate latest_events with event names
+            if 'latest_events' in user_dict and user_dict['latest_events']:
+                from src.models.event import Event # Import Event model locally
+                detailed_latest_events = []
+                for event_id_obj in user_dict['latest_events']:
+                    # Ensure event_id_obj is an ObjectId. If it's a string, convert it.
+                    event = Event.find_by_id(str(event_id_obj))
+                    if event:
+                        detailed_latest_events.append({
+                            '_id': str(event['_id']),
+                            'title': event.get('title', 'Unknown Event')
+                        })
+                user_dict['latest_events'] = detailed_latest_events
+
+            # Comments should already be formatted if coming from User.serialize and updated correctly
+            # Re-format dates in comments just in case, or if they were added manually without formatting
+            if 'comments' in user_dict and user_dict['comments']:
+                for comment in user_dict['comments']:
+                    if 'created_at' in comment and isinstance(comment['created_at'], datetime):
+                        comment['created_at'] = comment['created_at'].isoformat()
+
+            return user_dict
+        except Exception as e: # Catching specific exception
+            print(f"Error in get_user_profile_with_ratings: {e}") # Log the actual error
             return None
+
+    @staticmethod
+    def get_participants_by_event(event_id, requesting_user_id):
+        """Get all participants for a given event, fetching their public profiles, with status and authorization checks."""
+        from src.models.event import Event # Import locally to avoid circular dependency
+
+        event = Event.find_by_id(event_id)
+        if not event:
+            raise ValueError("Event not found")
+
+        # 1. Check Event Status: Only allow for upcoming or active events
+        event_status = event.get('status')
+        if event_status not in ['upcoming', 'active']:
+            raise ValueError("Cannot view participants for an event that is not upcoming or active.")
+
+        # 2. Check User Authorization: User must be a participant or the host
+        event_host_id = str(event.get('user_id'))
+        event_participants = [str(p_id) for p_id in event.get('participants', [])]
+
+        if requesting_user_id != event_host_id and requesting_user_id not in event_participants:
+            raise ValueError("Unauthorized: You must be a participant or the host of this event to view participants.")
+
+        participant_ids = event.get('participants', [])
+        participants_details = []
+        for p_id in participant_ids:
+            user = User.find_by_id(str(p_id)) # Use User.find_by_id to get user details
+            if user:
+                participants_details.append(User.serialize(user)) # Serialize user for consistent output
+        return participants_details

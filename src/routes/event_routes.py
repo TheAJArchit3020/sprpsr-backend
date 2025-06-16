@@ -430,45 +430,6 @@ def kick_participant(event_id, participant_user_id):
     """
     return EventController.kick_participant(event_id, participant_user_id)
 
-@event_bp.route('/events/<event_id>/participants', methods=['GET'])
-@token_required
-def get_participants(event_id):
-    """
-    Get participants of an event
-    ---
-    tags:
-      - Events
-    security:
-      - Bearer: []
-    parameters:
-      - in: path
-        name: event_id
-        type: string
-        required: true
-        description: ID of the event
-    responses:
-      200:
-        description: List of participants
-        schema:
-          type: array
-          items:
-            type: object
-            properties:
-              _id:
-                type: string
-              name:
-                type: string
-              photo_url:
-                type: string
-      401:
-        description: Unauthorized
-      404:
-        description: Event not found
-      500:
-        description: Internal server error
-    """
-    return EventController.get_participants(event_id)
-
 @event_bp.route('/events/<event_id>/rate', methods=['POST'])
 @token_required
 def submit_rating(event_id):
@@ -648,3 +609,46 @@ def get_host_event_details(event_id):
         description: Internal server error
     """
     return EventController.get_host_event_details(event_id)
+
+@event_bp.route('/events/<event_id>', methods=['DELETE'])
+@token_required
+def delete_event(event_id):
+    """
+    Delete an event by ID (Host Only)
+    ---
+    tags:
+      - Events
+    security:
+      - Bearer: []
+    parameters:
+      - in: path
+        name: event_id
+        type: string
+        required: true
+        description: ID of the event to delete
+    responses:
+      200:
+        description: Event deleted successfully
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: Event deleted successfully.
+      400:
+        description: Bad request (e.g., Event not found, Unauthorized)
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+      401:
+        description: Unauthorized (missing or invalid token)
+      403:
+        description: Forbidden (user is not the host)
+      404:
+        description: Event not found
+      500:
+        description: Internal server error
+    """
+    return EventController.delete_event(event_id)

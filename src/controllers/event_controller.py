@@ -62,6 +62,7 @@ class EventController:
         """Get events near the authenticated user's location."""
         user_id = request.user_id  
         max_distance_km = request.args.get('max_distance_km', type=float, default=10)  # Default to 10 km
+        event_type = request.args.get('event_type', type=str, default='both').lower() # 'public', 'private', or 'both'
 
         # Fetch the user to get their location
         user = User.find_by_id(user_id)
@@ -80,7 +81,7 @@ class EventController:
 
         try:
             # Call the service method to get nearby events using user's location
-            nearby_events = EventService.get_nearby_events(latitude, longitude, max_distance_km)
+            nearby_events = EventService.get_nearby_events(latitude, longitude, max_distance_km, event_type)
             return jsonify(nearby_events)
         except Exception as e:
             return jsonify({'error': str(e)}), 500
@@ -166,6 +167,20 @@ class EventController:
         try:
             event_details = EventService.get_host_event_details(event_id, host_id)
             return jsonify(event_details), 200
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @staticmethod
+    @token_required
+    def delete_event(event_id):
+        """Delete an event by its ID. Only the host can delete it."""
+        host_user_id = request.user_id # Get host ID from token
+
+        try:
+            result = EventService.delete_event(event_id, host_user_id)
+            return jsonify(result), 200
         except ValueError as e:
             return jsonify({'error': str(e)}), 400
         except Exception as e:

@@ -1,5 +1,6 @@
 from datetime import datetime
 from bson import ObjectId
+from bson.errors import InvalidId
 from src.config.database import get_database
 
 db = get_database()
@@ -20,7 +21,11 @@ class User:
         # MongoDB stores _id as ObjectId, so convert string ID to ObjectId
         try:
             return users_collection.find_one({'_id': ObjectId(user_id)})
-        except:
+        except InvalidId:
+            print(f"Invalid ObjectId format for user_id: {user_id}")
+            return None
+        except Exception as e:
+            print(f"Error finding user by ID {user_id}: {e}")
             return None
     
     @staticmethod
@@ -35,7 +40,9 @@ class User:
             'photo_url': profile.get('photo_url'),
             'location': profile.get('location'),
             'created_at': datetime.utcnow(),
-            'updated_at': datetime.utcnow()
+            'updated_at': datetime.utcnow(),
+            'events_organized': 0,
+            'latest_events': []
         }
         result = users_collection.insert_one(new_user)
         return str(result.inserted_id)
@@ -91,7 +98,12 @@ class User:
             user_dict['updated_at'] = user_dict['updated_at'].isoformat()
         
         # Return location as is (should be GeoJSON already)
-        return user_dict 
+        
+        # Convert latest_events ObjectIds to strings
+        if 'latest_events' in user_dict and isinstance(user_dict['latest_events'], list):
+            user_dict['latest_events'] = [str(event_id) for event_id in user_dict['latest_events']]
+
+        return user_dict
 
     @staticmethod
     def update_rating(user_id, rating, comment=None):

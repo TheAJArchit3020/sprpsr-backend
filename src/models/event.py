@@ -92,11 +92,37 @@ class Event:
             return []
 
     @staticmethod
-    def add_participant(event_id, user_id):
-        """Add a participant to an active event."""
+    def find_by_user_id_as_host(user_id):
+        """Find all events organized by a specific user across all collections."""
         try:
-            result = active_events_collection.update_one(
-                {'_id': ObjectId(event_id)}, 
+            upcoming = list(upcoming_events_collection.find({'user_id': ObjectId(user_id)}))
+            active = list(active_events_collection.find({'user_id': ObjectId(user_id)}))
+            archived = list(archived_events_collection.find({'user_id': ObjectId(user_id)}))
+            return upcoming + active + archived
+        except:
+            return []
+
+    @staticmethod
+    def add_participant(event_id, user_id):
+        """Add a participant to an event in either upcoming or active collection."""
+        event = Event.find_by_id(event_id)
+        if not event:
+            return False # Event not found
+
+        collection = None
+        if event.get('status') == 'upcoming':
+            collection = upcoming_events_collection
+        elif event.get('status') == 'active':
+            collection = active_events_collection
+        
+        if collection is None:
+            # Event is in an unexpected status (e.g., archived, or status missing)
+            print(f"Warning: Attempted to add participant to event {event_id} with unexpected status {event.get('status')}")
+            return False
+
+        try:
+            result = collection.update_one(
+                {'_id': ObjectId(event_id)},
                 {'$addToSet': {'participants': ObjectId(user_id)}}
             )
             return result.matched_count > 0 and result.modified_count > 0
@@ -145,4 +171,25 @@ class Event:
             return False
         except Exception as e:
             print(f"Error moving event to archived: {e}")
+            return False
+
+    @staticmethod
+    def delete(event_id):
+        """Deletes an event from whichever collection it currently resides in."""
+        try:
+            # Try to delete from upcoming
+            result = upcoming_events_collection.delete_one({'_id': ObjectId(event_id)})
+            if result.deleted_count > 0: return True
+
+            # If not in upcoming, try active
+            result = active_events_collection.delete_one({'_id': ObjectId(event_id)})
+            if result.deleted_count > 0: return True
+
+            # If not in active, try archived
+            result = archived_events_collection.delete_one({'_id': ObjectId(event_id)})
+            if result.deleted_count > 0: return True
+            
+            return False # Event not found in any collection
+        except Exception as e:
+            print(f"Error deleting event: {e}")
             return False

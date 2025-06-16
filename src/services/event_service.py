@@ -137,8 +137,8 @@ class EventService:
         return [EventService._serialize_event(e) for e in events]
 
     @staticmethod
-    def get_nearby_events(latitude, longitude, max_distance_km):
-        """Find upcoming events near a given location within a specified radius."""
+    def get_nearby_events(latitude, longitude, max_distance_km, event_type):
+        """Find upcoming events near a given location within a specified radius, with optional privacy filter."""
         current_time = datetime.utcnow().replace(tzinfo=pytz.utc)
         max_distance_meters = max_distance_km * 1000
         
@@ -148,6 +148,15 @@ class EventService:
             "coordinates": [longitude, latitude]
         }
         
+        # Initial match stage for location existence
+        match_stage = { "location": { "$exists": True, "$ne": None } }
+
+        # Add event_type filter
+        if event_type == 'public':
+            match_stage['is_private'] = False
+        elif event_type == 'private':
+            match_stage['is_private'] = True
+
         # Common pipeline for both collections
         geo_pipeline = [
             {
@@ -158,7 +167,7 @@ class EventService:
                     "spherical": True
                 }
             },
-            { "$match": { "location": { "$exists": True, "$ne": None } } },
+            { "$match": match_stage },
             { "$sort": { "distance": 1 } }
         ]
 
@@ -188,6 +197,10 @@ class EventService:
         event = Event.find_by_id(event_id)
         if not event:
             raise ValueError("Event not found")
+            
+        # Prevent joining archived events
+        if event.get('status') == 'archived':
+            raise ValueError("Cannot join an archived event.")
             
         # Check if user is already a participant
         if ObjectId(user_id) in event.get('participants', []):
@@ -386,3 +399,20 @@ class EventService:
         event_details['pending_requests'] = event_pending_requests
 
         return event_details
+
+    @staticmethod
+    def delete_event(event_id, host_user_id):
+        """Delete an event, ensuring only the host can delete it."""
+        event = Event.find_by_id(event_id)
+        if not event:
+            raise ValueError("Event not found.")
+
+        if str(event.get('user_id')) != host_user_id:
+            raise ValueError("Unauthorized: Only the host can delete this event.")
+
+        # Delete from the collection it's currently in
+        success = Event.delete(event_id)
+        if not success:
+            raise Exception("Failed to delete event from database.")
+
+        return {'message': 'Event deleted successfully.'}
