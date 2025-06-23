@@ -7,7 +7,6 @@ class UserController:
     @staticmethod
     @token_required # Protect this endpoint with auth middleware
     def update_profile():
-        """Update authenticated user's profile."""
         user_id = request.user_id 
 
         # Profile update data is sent as a JSON string within form-data
@@ -37,7 +36,6 @@ class UserController:
     @staticmethod
     @token_required
     def get_public_profile(user_id):
-        """Get a user's public profile including ratings and comments."""
         try:
             user_profile = UserService.get_user_profile_with_ratings(user_id)
             if user_profile:

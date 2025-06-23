@@ -1,53 +1,106 @@
 from flask import Blueprint, request, jsonify
 from src.controllers.user_controller import UserController
 from src.middleware.auth_middleware import token_required
+from flasgger import swag_from
 
 user_bp = Blueprint('user_bp', __name__, url_prefix='/api')
 
 # Define user routes
-user_bp.route('/user/profile', methods=['PUT'])(UserController.update_profile)
-user_bp.route('/users/<user_id>', methods=['GET'])(UserController.get_public_profile)
-user_bp.route('/events/<event_id>/participants', methods=['GET'])(UserController.get_participants_by_event)
+@user_bp.route('/user/profile', methods=['PUT'])
+@swag_from({
+    'tags': ['User'],
+    'consumes': ['multipart/form-data'],
+    'parameters': [
+        {
+            'in': 'formData',
+            'name': 'update_data',
+            'type': 'string',
+            'required': False,
+            'description': 'JSON string with profile fields to update'
+        },
+        {
+            'in': 'formData',
+            'name': 'photo',
+            'type': 'file',
+            'required': False,
+            'description': 'Profile photo to upload'
+        }
+    ],
+    'responses': {
+        200: {
+            'description': 'Profile updated successfully'
+        },
+        400: {
+            'description': 'Bad request (invalid data or no data provided)'
+        },
+        500: {
+            'description': 'Internal server error'
+        }
+    }
+})
+def update_profile():
+    return UserController.update_profile()
 
-# Swagger documentation for /api/events/<event_id>/participants
-user_bp.route('/events/<event_id>/participants', methods=['GET'])( 
-    token_required(
-        user_bp.add_url_rule(
-            '/events/<event_id>/participants',
-            'get_participants_by_event_docs',
-            lambda event_id:
-                jsonify({
-                    'description': 'Retrieve a list of participants for a specific event.',
-                    'parameters': [
-                        {
-                            'name': 'event_id',
-                            'in': 'path',
-                            'type': 'string',
-                            'required': True,
-                            'description': 'The ID of the event to retrieve participants for.'
-                        }
-                    ],
-                    'responses': {
-                        '200': {
-                            'description': 'A list of event participants.',
-                            'schema': {
-                                'type': 'array',
-                                'items': {
-                                    '$ref': '#/definitions/UserProfile'
-                                }
-                            }
-                        },
-                        '404': {
-                            'description': 'Event not found or no participants found for the event.'
-                        },
-                        '500': {
-                            'description': 'Internal server error.'
-                        }
-                    },
-                    'security': [{
-                        'BearerAuth': []
-                    }]
-                })
-        )
-    )
-) 
+@user_bp.route('/users/<user_id>', methods=['GET'])
+@swag_from({
+    'tags': ['User'],
+    'parameters': [
+        {
+            'in': 'path',
+            'name': 'user_id',
+            'type': 'string',
+            'required': True,
+            'description': 'The ID of the user to retrieve'
+        }
+    ],
+    'responses': {
+        200: {
+            'description': 'User profile found'
+        },
+        404: {
+            'description': 'User not found'
+        },
+        500: {
+            'description': 'Internal server error'
+        }
+    }
+})
+def get_public_profile(user_id):
+    return UserController.get_public_profile(user_id)
+
+@user_bp.route('/events/<event_id>/participants', methods=['GET'])
+@swag_from({
+    'tags': ['User'],
+    'parameters': [
+        {
+            'name': 'event_id',
+            'in': 'path',
+            'type': 'string',
+            'required': True,
+            'description': 'The ID of the event to retrieve participants for.'
+        }
+    ],
+    'responses': {
+        200: {
+            'description': 'A list of event participants.',
+            'schema': {
+                'type': 'array',
+                'items': {
+                    '$ref': '#/definitions/UserProfile'
+                }
+            }
+        },
+        404: {
+            'description': 'Event not found or no participants found for the event.'
+        },
+        500: {
+            'description': 'Internal server error.'
+        }
+    },
+    'security': [{
+        'BearerAuth': []
+    }]
+})
+@token_required
+def get_participants_by_event(event_id):
+    return UserController.get_participants_by_event(event_id) 

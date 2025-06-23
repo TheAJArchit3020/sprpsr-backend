@@ -1,3 +1,5 @@
+import logging
+import sys
 from flask import Flask, jsonify
 from src.utils.firebase import initialize_firebase
 from src.routes.auth_routes import auth_bp
@@ -8,8 +10,25 @@ from src.routes.chat_routes import chat_bp
 from src.config.swagger import init_swagger
 from flask_cors import CORS
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
 app = Flask(__name__)
 CORS(app)
+
+# Enable Flask's debug logging
+app.logger.setLevel(logging.INFO)
+logging.getLogger('werkzeug').setLevel(logging.INFO)
+
+# Log application startup
+app.logger.info("Starting Flask application...")
+print("Flask application starting up!", flush=True)
 
 initialize_firebase()
 spec = init_swagger(app)
@@ -38,6 +57,7 @@ def home():
               type: string
               example: Welcome to sprpsr backend!
     """
+    app.logger.info("Home endpoint accessed")
     return jsonify({"message": "Welcome to sprpsr backend!"})
 
 if __name__ == '__main__':
