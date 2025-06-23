@@ -56,3 +56,18 @@ class UserController:
             return jsonify({'error': str(e)}), 400 # Changed 404 to 400 for more specific error
         except Exception as e:
             return jsonify({'message': 'An error occurred while fetching participants', 'error': str(e)}), 500 
+
+    @staticmethod
+    @token_required
+    def get_own_profile():
+        """
+        Get the authenticated user's own profile using the user ID from the token.
+        """
+        try:
+            user_id = request.user_id
+            user_profile = UserService.get_user_profile_with_ratings(user_id)
+            if user_profile:
+                return jsonify(user_profile), 200
+            return jsonify({'message': 'User not found'}), 404
+        except Exception as e:
+            return jsonify({'message': 'An error occurred while fetching user profile', 'error': str(e)}), 500 

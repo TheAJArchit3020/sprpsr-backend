@@ -103,4 +103,42 @@ def get_public_profile(user_id):
 })
 @token_required
 def get_participants_by_event(event_id):
-    return UserController.get_participants_by_event(event_id) 
+    return UserController.get_participants_by_event(event_id)
+
+@user_bp.route('/user/profile', methods=['GET'])
+@swag_from({
+    'tags': ['User'],
+    'summary': 'Get own user profile',
+    'description': 'Get the authenticated user\'s own profile using the user ID from the token.',
+    'responses': {
+        200: {
+            'description': 'User profile found',
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    '_id': {'type': 'string'},
+                    'name': {'type': 'string'},
+                    'photo_url': {'type': 'string'},
+                    'rating': {'type': 'number'},
+                    'rating_count': {'type': 'integer'},
+                    'total_rating': {'type': 'number'},
+                    'comments': {'type': 'array', 'items': {'type': 'object'}},
+                    'events_organized': {'type': 'integer'},
+                    'latest_events': {'type': 'array', 'items': {'type': 'object'}},
+                }
+            }
+        },
+        404: {
+            'description': 'User not found'
+        },
+        500: {
+            'description': 'Internal server error'
+        }
+    },
+    'security': [{
+        'BearerAuth': []
+    }]
+})
+@token_required
+def get_own_profile():
+    return UserController.get_own_profile() 
