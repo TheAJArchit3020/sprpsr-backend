@@ -8,6 +8,7 @@ from src.utils.firebase_storage import upload_to_firebase
 import pytz
 from dateutil import parser 
 from src.models.feedback import Feedback
+from src.models.event_request import EventRequest
 
 class EventService:
 
@@ -85,13 +86,60 @@ class EventService:
 
     @staticmethod
     def get_event(user_id, event_id):
-        """Get a specific event by ID, searching across all collections."""
+        """Get a specific event by ID, searching across all collections, and include host, participant details, and join/request status for the requesting user."""
         event = Event.find_by_id(event_id) 
 
         if not event:
             return None
         
-        return EventService._serialize_event(event)
+        # Fetch host details
+        host_user = User.find_by_id(str(event.get('user_id')))
+        host_info = None
+        if host_user:
+            host_info = {
+                '_id': str(host_user.get('_id')),
+                'name': host_user.get('name'),
+                'photo_url': host_user.get('photo_url')
+            }
+        
+        # Fetch participant details
+        participant_ids = event.get('participants', [])
+        participants_info = []
+        is_join = False
+        for pid in participant_ids:
+            user = User.find_by_id(str(pid))
+            if user:
+                participants_info.append({
+                    '_id': str(user.get('_id')),
+                    'name': user.get('name'),
+                    'photo_url': user.get('photo_url')
+                })
+            if str(pid) == str(user_id):
+                is_join = True
+        
+        # Determine join/request status for the requesting user
+        status = ''
+        if is_join:
+            status = 'Joined'
+        elif event.get('is_private', False):
+            req = EventRequest.find_by_event_and_user(event_id, user_id)
+            if req:
+                if req.get('status') == 'pending':
+                    status = 'Requested'
+                elif req.get('status') == 'accepted':
+                    status = 'Joined'
+                    is_join = True
+                elif req.get('status') == 'rejected':
+                    status = ''
+                    is_join = False
+        # For public events, if not joined, status remains '' and is_join is False
+
+        event_data = EventService._serialize_event(event)
+        event_data['host'] = host_info
+        event_data['participants_details'] = participants_info
+        event_data['isJoin'] = is_join
+        event_data['status'] = status
+        return event_data
 
     @staticmethod
     def _serialize_event(event):
@@ -138,7 +186,7 @@ class EventService:
 
     @staticmethod
     def get_nearby_events(latitude, longitude, max_distance_km, event_type):
-        """Find upcoming events near a given location within a specified radius, with optional privacy filter."""
+        """Find upcoming events near a given location within a specified radius, with optional privacy filter. Includes host name and photo_url."""
         current_time = datetime.utcnow().replace(tzinfo=pytz.utc)
         max_distance_meters = max_distance_km * 1000
         
@@ -176,19 +224,31 @@ class EventService:
         
         # Process upcoming events
         processed_events = []
+        from src.models.user import User
         for event in upcoming_events:
             try:
                 start_time = parser.isoparse(str(event['start_time'])).replace(tzinfo=pytz.utc)
                 if current_time >= start_time:
                     Event.move_to_active(event['_id'])
                 else:
-                    processed_events.append(event)
+                    event_data = EventService._serialize_event(event)
+                    # Add host info
+                    host_user = User.find_by_id(str(event.get('user_id')))
+                    host_info = None
+                    if host_user:
+                        host_info = {
+                            '_id': str(host_user.get('_id')),
+                            'name': host_user.get('name'),
+                            'photo_url': host_user.get('photo_url')
+                        }
+                    event_data['host'] = host_info
+                    processed_events.append(event_data)
             except Exception as e:
                 print(f"Warning: Invalid event time format. Skipping event {event['_id']}. Error: {e}")
                 continue
 
         # Return only upcoming events
-        return [EventService._serialize_event(event) for event in processed_events]
+        return processed_events
 
     @staticmethod
     def join_or_request_event(event_id, user_id):
@@ -235,21 +295,19 @@ class EventService:
 
     @staticmethod
     def leave_event(event_id, user_id):
-        """Handle a user leaving an event. This now targets active events."""
-        # Find the event in the active collection
-        try:
-            event_obj = active_events_collection.find_one({'_id': ObjectId(event_id)})
-        except:
-            raise ValueError("Invalid Event ID")
-
+        """Handle a user leaving an event. This now targets active and upcoming events."""
+        # Try to find the event in active or upcoming collections
+        event_obj = active_events_collection.find_one({'_id': ObjectId(event_id)})
         if not event_obj:
-            raise ValueError("Event not found or not active")
+            event_obj = upcoming_events_collection.find_one({'_id': ObjectId(event_id)})
+        if not event_obj:
+            raise ValueError("Event not found or not active/upcoming")
 
         # Check if user is a participant
         if ObjectId(user_id) not in event_obj.get('participants', []):
             raise ValueError("User is not a participant of this event")
 
-        # Remove participant using the method in the model (which targets active_events_collection)
+        # Remove participant using the method in the model (which targets both collections)
         success = Event.remove_participant(event_id, user_id)
         
         if not success:
@@ -259,29 +317,29 @@ class EventService:
 
     @staticmethod
     def kick_participant(event_id, host_user_id, participant_user_id_to_kick):
-        """Handle a host kicking a participant from an event. This now targets active events."""
-        # Find the event in the active collection
-        try:
-            event_obj = active_events_collection.find_one({'_id': ObjectId(event_id)})
-        except:
-            raise ValueError("Invalid Event ID")
-
+        """Handle a host kicking a participant from an event. This now targets active and upcoming events."""
+        # Try to find the event in active or upcoming collections
+        event_obj = active_events_collection.find_one({'_id': ObjectId(event_id)})
+        collection = active_events_collection
         if not event_obj:
-            raise ValueError("Event not found or not active")
-            
+            event_obj = upcoming_events_collection.find_one({'_id': ObjectId(event_id)})
+            collection = upcoming_events_collection
+        if not event_obj:
+            raise ValueError("Event not found or not active/upcoming")
+        
         # Check if the host_user_id is the actual host of the event
         if event_obj.get('user_id') != ObjectId(host_user_id):
-             raise ValueError("Only the event host can kick participants")
+            raise ValueError("Only the event host can kick participants")
 
         # Check if the participant to kick is in the participants list
         if ObjectId(participant_user_id_to_kick) not in event_obj.get('participants', []):
             raise ValueError("Participant to kick is not in this event")
-            
+        
         # Check if the host is trying to kick themselves (optional but good to prevent)
         if ObjectId(host_user_id) == ObjectId(participant_user_id_to_kick):
-             raise ValueError("Host cannot kick themselves")
+            raise ValueError("Host cannot kick themselves")
 
-        # Remove participant using the method in the model (which targets active_events_collection)
+        # Remove participant using the method in the model (which targets both collections)
         success = Event.remove_participant(event_id, participant_user_id_to_kick)
         
         if not success:

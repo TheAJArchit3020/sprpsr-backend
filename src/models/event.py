@@ -132,10 +132,18 @@ class Event:
 
     @staticmethod
     def remove_participant(event_id, user_id_to_remove):
-        """Remove a participant from an active event."""
+        """Remove a participant from an upcoming or active event."""
         try:
+            # Try to remove from active events
             result = active_events_collection.update_one(
                 {'_id': ObjectId(event_id)}, 
+                {'$pull': {'participants': ObjectId(user_id_to_remove)}}
+            )
+            if result.matched_count > 0 and result.modified_count > 0:
+                return True
+            # If not in active, try upcoming events
+            result = upcoming_events_collection.update_one(
+                {'_id': ObjectId(event_id)},
                 {'$pull': {'participants': ObjectId(user_id_to_remove)}}
             )
             return result.matched_count > 0 and result.modified_count > 0

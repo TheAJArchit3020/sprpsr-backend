@@ -68,6 +68,21 @@ class EventRequest:
             return False
 
     @staticmethod
+    def find_by_event_and_user(event_id, user_id):
+        """Find a join request for a specific event and user."""
+        try:
+            req = event_requests_collection.find_one({
+                'event_id': ObjectId(event_id),
+                'user_id': ObjectId(user_id)
+            })
+            if req:
+                return EventRequest._serialize_request(req)
+            return None
+        except Exception as e:
+            print(f"Error finding event request: {e}")
+            return None
+
+    @staticmethod
     def _serialize_request(request):
         """Convert MongoDB request document to JSON-serializable format."""
         if not request:
