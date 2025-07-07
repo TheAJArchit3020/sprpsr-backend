@@ -185,8 +185,8 @@ class EventService:
         return [EventService._serialize_event(e) for e in events]
 
     @staticmethod
-    def get_nearby_events(latitude, longitude, max_distance_km, event_type):
-        """Find upcoming events near a given location within a specified radius, with optional privacy filter. Includes host name and photo_url."""
+    def get_nearby_events(latitude, longitude, max_distance_km, event_type, requesting_user_id=None):
+        """Find upcoming events near a given location within a specified radius, with optional privacy filter. Includes host name and photo_url. Excludes events created by the requesting user if provided."""
         current_time = datetime.utcnow().replace(tzinfo=pytz.utc)
         max_distance_meters = max_distance_km * 1000
         
@@ -226,6 +226,9 @@ class EventService:
         processed_events = []
         from src.models.user import User
         for event in upcoming_events:
+            # Exclude events created by the requesting user
+            if requesting_user_id and str(event.get('user_id')) == str(requesting_user_id):
+                continue
             try:
                 start_time = parser.isoparse(str(event['start_time'])).replace(tzinfo=pytz.utc)
                 if current_time >= start_time:

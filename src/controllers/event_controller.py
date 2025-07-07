@@ -81,7 +81,7 @@ class EventController:
 
         try:
             # Call the service method to get nearby events using user's location
-            nearby_events = EventService.get_nearby_events(latitude, longitude, max_distance_km, event_type)
+            nearby_events = EventService.get_nearby_events(latitude, longitude, max_distance_km, event_type, requesting_user_id=user_id)
             return jsonify(nearby_events)
         except Exception as e:
             return jsonify({'error': str(e)}), 500
