@@ -103,6 +103,19 @@ class Event:
             return []
 
     @staticmethod
+    def find_by_participant_id(user_id):
+        """Find all events where the user is a participant (not host) across all collections."""
+        try:
+            query = {'participants': ObjectId(user_id)}
+            upcoming = list(upcoming_events_collection.find(query))
+            active = list(active_events_collection.find(query))
+            archived = list(archived_events_collection.find(query))
+            return upcoming + active + archived
+        except Exception as e:
+            print(f"Error finding events by participant: {e}")
+            return []
+
+    @staticmethod
     def add_participant(event_id, user_id):
         """Add a participant to an event in either upcoming or active collection."""
         event = Event.find_by_id(event_id)

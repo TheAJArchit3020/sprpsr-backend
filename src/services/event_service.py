@@ -477,3 +477,12 @@ class EventService:
             raise Exception("Failed to delete event from database.")
 
         return {'message': 'Event deleted successfully.'}
+
+    @staticmethod
+    def get_joined_events(user_id):
+        """Get all events that the user has joined (is a participant, not host)."""
+        from src.models.event import Event
+        joined_events = Event.find_by_participant_id(user_id)
+        # Exclude events where the user is the host
+        filtered = [e for e in joined_events if str(e.get('user_id')) != str(user_id)]
+        return [EventService._serialize_event(e) for e in filtered]

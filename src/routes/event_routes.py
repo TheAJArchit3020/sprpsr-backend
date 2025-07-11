@@ -610,6 +610,30 @@ def get_host_event_details(event_id):
     """
     return EventController.get_host_event_details(event_id)
 
+@event_bp.route('/events/joined', methods=['GET'])
+@token_required
+def get_joined_events():
+    """
+    Get all events the authenticated user has joined (not hosted)
+    ---
+    tags:
+      - Events
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: List of joined events
+        schema:
+          type: array
+          items:
+            type: object
+      401:
+        description: Unauthorized
+      500:
+        description: Internal server error
+    """
+    return EventController.get_joined_events()
+
 @event_bp.route('/events/<event_id>', methods=['DELETE'])
 @token_required
 def delete_event(event_id):

@@ -186,5 +186,16 @@ class EventController:
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
+    @staticmethod
+    @token_required
+    def get_joined_events():
+        """Get all events the authenticated user has joined (not hosted)."""
+        user_id = request.user_id
+        try:
+            events = EventService.get_joined_events(user_id)
+            return jsonify(events), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
 
 
