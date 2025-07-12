@@ -482,7 +482,28 @@ class EventService:
     def get_joined_events(user_id):
         """Get all events that the user has joined (is a participant, not host)."""
         from src.models.event import Event
+        from src.models.user import User
         joined_events = Event.find_by_participant_id(user_id)
         # Exclude events where the user is the host
         filtered = [e for e in joined_events if str(e.get('user_id')) != str(user_id)]
-        return [EventService._serialize_event(e) for e in filtered]
+        
+        # Serialize events and add participant details
+        serialized_events = []
+        for event in filtered:
+            serialized_event = EventService._serialize_event(event)
+            
+            # Add participant details with names
+            participants_details = []
+            for participant_id in event.get('participants', []):
+                user = User.find_by_id(str(participant_id))
+                if user:
+                    participants_details.append({
+                        '_id': str(user.get('_id')),
+                        'name': user.get('name'),
+                        'photo_url': user.get('photo_url')
+                    })
+            
+            serialized_event['participants'] = participants_details
+            serialized_events.append(serialized_event)
+        
+        return serialized_events
