@@ -492,9 +492,11 @@ class EventService:
         for event in filtered:
             serialized_event = EventService._serialize_event(event)
             
-            # Add participant details with names
+            # Add participant details with names, excluding the requesting user
             participants_details = []
             for participant_id in event.get('participants', []):
+                if str(participant_id) == str(user_id):
+                    continue  # Skip the requesting user
                 user = User.find_by_id(str(participant_id))
                 if user:
                     participants_details.append({
