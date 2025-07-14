@@ -487,7 +487,7 @@ class EventService:
         # Exclude events where the user is the host
         filtered = [e for e in joined_events if str(e.get('user_id')) != str(user_id)]
         
-        # Serialize events and add participant details
+        # Serialize events and add participant and host details
         serialized_events = []
         for event in filtered:
             serialized_event = EventService._serialize_event(event)
@@ -504,8 +504,19 @@ class EventService:
                         'name': user.get('name'),
                         'photo_url': user.get('photo_url')
                     })
-            
             serialized_event['participants'] = participants_details
+
+            # Add host details
+            host_user = User.find_by_id(str(event.get('user_id')))
+            if host_user:
+                serialized_event['host'] = {
+                    '_id': str(host_user.get('_id')),
+                    'name': host_user.get('name'),
+                    'photo_url': host_user.get('photo_url')
+                }
+            else:
+                serialized_event['host'] = None
+
             serialized_events.append(serialized_event)
         
         return serialized_events
