@@ -480,12 +480,22 @@ class EventService:
 
     @staticmethod
     def get_joined_events(user_id):
-        """Get all events that the user has joined (is a participant, not host)."""
+        """Get all events that the user has joined (is a participant or host)."""
         from src.models.event import Event
         from src.models.user import User
+        from bson import ObjectId
+        
+        # Events where user is a participant
         joined_events = Event.find_by_participant_id(user_id)
-        # Exclude events where the user is the host
-        filtered = [e for e in joined_events if str(e.get('user_id')) != str(user_id)]
+        # Events where user is the host
+        hosted_events = Event.find_by_user_id(user_id)
+        
+        # Combine and deduplicate events by _id
+        all_events_dict = {}
+        for event in joined_events + hosted_events:
+            event_id = str(event.get('_id'))
+            all_events_dict[event_id] = event
+        filtered = list(all_events_dict.values())
         
         # Serialize events and add participant and host details
         serialized_events = []
